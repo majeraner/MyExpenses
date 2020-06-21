@@ -517,5 +517,10 @@
                 android:key="@string/pref_debug_show_ads_key"
                 android:summary="Ads" />
         </PreferenceScreen>
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="@string/pref_hack_mode_key"
+            android:summary="@string/pref_hack_mode"
+            android:title="@string/pref_hack_mode_title" />
     </PreferenceCategory>
 </PreferenceScreen> 

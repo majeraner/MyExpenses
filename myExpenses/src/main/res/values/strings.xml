@@ -910,4 +910,9 @@
     <string name="dialog_multi_tag_replace">Replace existing tags by new tags</string>
     <string name="new_tag_hint">Enter new tag</string>
     <string name="language_download_requested">Translations for language %s are requested from Play Store</string>
+    <string name="pref_hack_mode">Hack mode for illegal use</string>
+    <string name="pref_hack_mode_title">Hack mode</string>
+    <string name="pref_enter_hack_licence_title" tools:ignore="UnusedResources">Enter hacked key</string>
+    <string name="date_since">Date since</string>
+    <string name="date_until">Date until</string>
 </resources>

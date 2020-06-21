@@ -10,6 +10,8 @@ import com.annimon.stream.Stream;
 import com.google.android.vending.licensing.PreferenceObfuscator;
 
 import org.apache.commons.lang3.time.DateUtils;
+import org.threeten.bp.Instant;
+import org.threeten.bp.LocalDate;
 import org.threeten.bp.LocalTime;
 import org.threeten.bp.ZoneId;
 import org.threeten.bp.ZonedDateTime;
@@ -118,6 +120,20 @@ public class LicenceHandler {
         licenseStatusPrefs.remove(LICENSE_VALID_UNTIL_KEY);
       }
     }
+    licenseStatusPrefs.commit();
+    update();
+  }
+
+  public void updateLicenceStatusHack(LicenceStatus licenceHacked, long hackedSince, long hackedUntil) {
+    setLicenceStatus(licenceHacked);
+    licenseStatusPrefs.putString(LICENSE_STATUS_KEY, licenceStatus.name());
+    // LocalDate validSinceLocalDate = Instant.ofEpochMilli(hackedSince).atZone(ZoneId.systemDefault()).toLocalDate();
+    // ZonedDateTime validSince = validSinceLocalDate.atTime(LocalTime.MIN).atZone(ZoneId.of("Etc/GMT-14"));
+    ZonedDateTime validSince = LocalDate.now().atTime(LocalTime.MIN).atZone(ZoneId.of("Etc/GMT-14"));
+    licenseStatusPrefs.putString(LICENSE_VALID_SINCE_KEY, String.valueOf(validSince.toEpochSecond() * 1000));
+    LocalDate validUntilLocalDate = Instant.ofEpochMilli(hackedUntil).atZone(ZoneId.systemDefault()).toLocalDate();
+    ZonedDateTime validUntil = validUntilLocalDate.atTime(LocalTime.MAX).atZone(ZoneId.of("Etc/GMT+12"));
+    licenseStatusPrefs.putString(LICENSE_VALID_UNTIL_KEY, String.valueOf(validUntil.toEpochSecond() * 1000));
     licenseStatusPrefs.commit();
     update();
   }

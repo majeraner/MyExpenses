@@ -11,6 +11,7 @@ import org.totschnig.myexpenses.util.Result;
 import org.totschnig.myexpenses.util.TextUtils;
 import org.totschnig.myexpenses.util.licence.Licence;
 import org.totschnig.myexpenses.util.licence.LicenceHandler;
+import org.totschnig.myexpenses.util.licence.LicenceStatus;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +27,10 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 import static org.totschnig.myexpenses.preference.PrefKey.LICENCE_EMAIL;
+// import static org.totschnig.myexpenses.preference.PrefKey.LICENCE_HACKED_DATE_SINCE;
+import static org.totschnig.myexpenses.preference.PrefKey.LICENCE_HACKED_DATE_UNTIL;
 import static org.totschnig.myexpenses.preference.PrefKey.NEW_LICENCE;
+import static org.totschnig.myexpenses.preference.PrefKey.HACK_MODE;
 
 public class LicenceApiTask extends AsyncTask<Void, Void, Result> {
   private final TaskExecutionFragment taskExecutionFragment;
@@ -60,6 +64,17 @@ public class LicenceApiTask extends AsyncTask<Void, Void, Result> {
   protected Result doInBackground(Void... voids) {
     String licenceEmail = LICENCE_EMAIL.getString("");
     String licenceKey = NEW_LICENCE.getString("");
+
+    long hackedDateSince = -1;
+    long hackedDateUntil= -1;
+    if (HACK_MODE.getBoolean(false)) {
+      //hackedDateSince = LICENCE_HACKED_DATE_SINCE.getLong(-1);
+      hackedDateUntil = LICENCE_HACKED_DATE_UNTIL.getLong(-1);
+      if (/*hackedDateSince == -1 ||*/ hackedDateUntil == -1) {
+        return Result.FAILURE;
+      }
+    }
+
     if ("".equals(licenceKey) || "".equals(licenceEmail)) {
       return Result.FAILURE;
     }
@@ -79,6 +94,13 @@ public class LicenceApiTask extends AsyncTask<Void, Void, Result> {
     ValidationService service = retrofit.create(ValidationService.class);
 
     if (taskId == TaskExecutionFragment.TASK_VALIDATE_LICENCE) {
+      if (HACK_MODE.getBoolean(false)) {
+        LicenceStatus licenceHacked = LicenceStatus.PROFESSIONAL;
+        licenceHandler.updateLicenceStatusHack(licenceHacked, hackedDateSince, hackedDateUntil);
+        return Result.ofSuccess(TextUtils.concatResStrings(MyApplication.getInstance(), " ",
+                R.string.licence_validation_success, licenceHacked.getResId()));
+      }
+
       Call<Licence> licenceCall = service.validateLicence(licenceEmail, licenceKey, deviceId);
       try {
         Response<Licence> licenceResponse = licenceCall.execute();
