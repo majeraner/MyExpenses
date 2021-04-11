@@ -16,16 +16,19 @@
 package org.totschnig.myexpenses;
 
 import android.app.ActivityManager;
+import android.app.Application;
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.content.res.Configuration;
-import android.database.ContentObserver;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Process;
 import android.os.StrictMode;
 
@@ -34,11 +37,13 @@ import com.android.calendar.CalendarContractCompat.Calendars;
 import com.android.calendar.CalendarContractCompat.Events;
 import com.jakewharton.threetenabp.AndroidThreeTen;
 
+import org.totschnig.myexpenses.activity.OnboardingActivity;
 import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
-import org.totschnig.myexpenses.activity.SplashActivity;
 import org.totschnig.myexpenses.di.AppComponent;
 import org.totschnig.myexpenses.di.DaggerAppComponent;
 import org.totschnig.myexpenses.di.SecurityProvider;
+import org.totschnig.myexpenses.feature.FeatureManager;
+import org.totschnig.myexpenses.feature.OcrFeature;
 import org.totschnig.myexpenses.model.Template;
 import org.totschnig.myexpenses.model.Transaction;
 import org.totschnig.myexpenses.preference.PrefHandler;
@@ -50,39 +55,40 @@ import org.totschnig.myexpenses.service.DailyScheduler;
 import org.totschnig.myexpenses.service.PlanExecutor;
 import org.totschnig.myexpenses.sync.SyncAdapter;
 import org.totschnig.myexpenses.ui.ContextHelper;
+import org.totschnig.myexpenses.util.MoreUiUtilsKt;
 import org.totschnig.myexpenses.util.NotificationBuilderWrapper;
 import org.totschnig.myexpenses.util.Result;
 import org.totschnig.myexpenses.util.Utils;
-import org.totschnig.myexpenses.util.locale.LocaleManager;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
 import org.totschnig.myexpenses.util.crypt.PRNGFixes;
+import org.totschnig.myexpenses.util.io.NetworkUtilsKt;
 import org.totschnig.myexpenses.util.io.StreamReader;
 import org.totschnig.myexpenses.util.licence.LicenceHandler;
 import org.totschnig.myexpenses.util.locale.UserLocaleProvider;
 import org.totschnig.myexpenses.util.log.TagFilterFileLoggingTree;
-import org.totschnig.myexpenses.widget.AbstractWidget;
+import org.totschnig.myexpenses.viewmodel.WebUiViewModel;
 import org.totschnig.myexpenses.widget.AbstractWidgetKt;
-import org.totschnig.myexpenses.widget.AccountWidget;
-import org.totschnig.myexpenses.widget.TemplateWidget;
+import org.totschnig.myexpenses.widget.WidgetObserver;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.TimeZone;
-import java.util.UUID;
 
 import javax.inject.Inject;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatDelegate;
-import androidx.multidex.MultiDexApplication;
+import androidx.multidex.MultiDex;
 import androidx.preference.PreferenceManager;
 import timber.log.Timber;
 
+import static org.totschnig.myexpenses.feature.WebUiFeatureKt.START_ACTION;
+import static org.totschnig.myexpenses.feature.WebUiFeatureKt.STOP_ACTION;
 import static org.totschnig.myexpenses.preference.PrefKey.DEBUG_LOGGING;
+import static org.totschnig.myexpenses.preference.PrefKey.UI_WEB;
 
-public class MyApplication extends MultiDexApplication implements
+public class MyApplication extends Application implements
     OnSharedPreferenceChangeListener {
 
   public static final String DEFAULT_LANGUAGE = "default";
@@ -92,17 +98,18 @@ public class MyApplication extends MultiDexApplication implements
   @Inject
   CrashHandler crashHandler;
   @Inject
-  LocaleManager localeManager;
+  FeatureManager featureManager;
   @Inject
   PrefHandler prefHandler;
   @Inject
   UserLocaleProvider userLocaleProvider;
-  private static boolean instrumentationTest = false;
-  private static String testId;
+  @Inject
+  SharedPreferences mSettings;
+
   public static final String PLANNER_CALENDAR_NAME = "MyExpensesPlanner";
   public static final String PLANNER_ACCOUNT_NAME = "Local Calendar";
   public static final String INVALID_CALENDAR_ID = "-1";
-  private SharedPreferences mSettings;
+
   private static MyApplication mSelf;
 
   public static final String KEY_NOTIFICATION_ID = "notification_id";
@@ -122,14 +129,6 @@ public class MyApplication extends MultiDexApplication implements
 
   public AppComponent getAppComponent() {
     return appComponent;
-  }
-
-  public static void setInstrumentationTest(boolean instrumentationTest) {
-    MyApplication.instrumentationTest = instrumentationTest;
-  }
-
-  public static boolean isInstrumentationTest() {
-    return instrumentationTest;
   }
 
   public boolean isLocked() {
@@ -152,19 +151,30 @@ public class MyApplication extends MultiDexApplication implements
 
   @Override
   public void onCreate() {
-    if (BuildConfig.DEBUG && !instrumentationTest) {
+    if (BuildConfig.DEBUG) {
+      ///TODO disable in test
       enableStrictMode();
     }
     super.onCreate();
     checkAppReplacingState();
     initThreeTen();
     AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
+    MoreUiUtilsKt.setNightMode(prefHandler, this);
+    final boolean syncService = isSyncService();
+    crashHandler.initProcess(this, syncService);
     setupLogging();
-    if (!isSyncService()) {
+    if (!syncService) {
       // sets up mSettings
-      getSettings().registerOnSharedPreferenceChangeListener(this);
+      if (prefHandler.getBoolean(UI_WEB, false)) {
+        if (NetworkUtilsKt.isNetworkConnected(this)) {
+          controlWebUi(true);
+        } else {
+          prefHandler.putBoolean(UI_WEB, false);
+        }
+      }
+      mSettings.registerOnSharedPreferenceChangeListener(this);
       DailyScheduler.updatePlannerAlarms(this, false, false);
-      registerWidgetObservers();
+      WidgetObserver.Companion.register(this);
     }
     licenceHandler.init();
     NotificationBuilderWrapper.createChannels(this);
@@ -206,20 +216,23 @@ public class MyApplication extends MultiDexApplication implements
     mSelf = this;
     //we cannot use the standard way of reading preferences, since this works only after base context
     //has been attached
-    final Context wrapped = ContextHelper.wrap(base, UserLocaleProvider.Companion.resolveLocale(
-        PreferenceManager.getDefaultSharedPreferences(base).getString("ui_language", DEFAULT_LANGUAGE), Locale.getDefault()));
-    super.attachBaseContext(wrapped);
-    appComponent = buildAppComponent();
+    final Locale systemLocale = Locale.getDefault();
+    super.attachBaseContext(base);
+    MultiDex.install(this);
+    appComponent = buildAppComponent(systemLocale);
     appComponent.inject(this);
-    localeManager.initApplication(this);
+    featureManager.initApplication(this);
     crashHandler.onAttachBaseContext(this);
     DatabaseConstants.buildLocalized(userLocaleProvider.getUserPreferredLocale());
+    final Context wrapped = ContextHelper.wrap(base, UserLocaleProvider.Companion.resolveLocale(
+        PreferenceManager.getDefaultSharedPreferences(base).getString("ui_language", DEFAULT_LANGUAGE), systemLocale));
     Transaction.buildProjection(wrapped);
   }
 
   @NonNull
-  protected AppComponent buildAppComponent() {
+  protected AppComponent buildAppComponent(Locale systemLocale) {
     return DaggerAppComponent.builder()
+        .systemLocale(systemLocale)
         .applicationContext(this)
         .build();
   }
@@ -232,20 +245,9 @@ public class MyApplication extends MultiDexApplication implements
       Timber.plant(new TagFilterFileLoggingTree(this, SyncAdapter.TAG));
       Timber.plant(new TagFilterFileLoggingTree(this, LicenceHandler.TAG));
       Timber.plant(new TagFilterFileLoggingTree(this, TransactionProvider.TAG));
+      Timber.plant(new TagFilterFileLoggingTree(this, OcrFeature.TAG));
     }
     crashHandler.setupLogging(this);
-  }
-
-  private void registerWidgetObservers() {
-    final ContentResolver r = getContentResolver();
-    WidgetObserver mTemplateObserver = new WidgetObserver(TemplateWidget.class);
-    for (Uri uri : TemplateWidget.Companion.getOBSERVED_URIS()) {
-      r.registerContentObserver(uri, true, mTemplateObserver);
-    }
-    WidgetObserver mAccountObserver = new WidgetObserver(AccountWidget.class);
-    for (Uri uri : AccountWidget.Companion.getOBSERVED_URIS()) {
-      r.registerContentObserver(uri, true, mAccountObserver);
-    }
   }
 
   @Deprecated
@@ -257,26 +259,9 @@ public class MyApplication extends MultiDexApplication implements
     return userLocaleProvider.getSystemLocale();
   }
 
+  @Deprecated
   public SharedPreferences getSettings() {
-    if (mSettings == null) {
-      mSettings = instrumentationTest ? getSharedPreferences(getTestId(), Context.MODE_PRIVATE) :
-          PreferenceManager.getDefaultSharedPreferences(this);
-    }
     return mSettings;
-  }
-
-  public static String getTestId() {
-    if (testId == null) {
-      testId = UUID.randomUUID().toString();
-    }
-    return testId;
-  }
-
-  public static void cleanUpAfterTest() {
-    mSelf.deleteDatabase(testId);
-    mSelf.getSettings().edit().clear().apply();
-    new File(new File(mSelf.getFilesDir().getParentFile().getPath() + "/shared_prefs/"),
-        testId + ".xml").delete();
   }
 
   public LicenceHandler getLicenceHandler() {
@@ -284,10 +269,10 @@ public class MyApplication extends MultiDexApplication implements
   }
 
   @Override
-  public void onConfigurationChanged(Configuration newConfig) {
+  public void onConfigurationChanged(@NonNull Configuration newConfig) {
     super.onConfigurationChanged(newConfig);
     userLocaleProvider.setSystemLocale(newConfig.locale);
-    AbstractWidgetKt.updateWidgets(mSelf, AccountWidget.class, AbstractWidgetKt.WIDGET_CONTEXT_CHANGED);
+    AbstractWidgetKt.onConfigurationChanged(this);
   }
 
   public long getLastPause() {
@@ -295,7 +280,7 @@ public class MyApplication extends MultiDexApplication implements
   }
 
   public void setLastPause(ProtectedFragmentActivity ctx) {
-    if (ctx instanceof SplashActivity) return;
+    if (ctx instanceof OnboardingActivity) return;
     if (!isLocked()) {
       // if we are dealing with an activity called from widget that allows to
       // bypass password protection, we do not reset last pause
@@ -323,7 +308,7 @@ public class MyApplication extends MultiDexApplication implements
    * data entry from widget is allowed sets isLocked as a side effect
    */
   public boolean shouldLock(ProtectedFragmentActivity ctx) {
-    if (ctx instanceof SplashActivity) return false;
+    if (ctx instanceof OnboardingActivity) return false;
     boolean isStartFromWidget = ctx == null
         || ctx.getIntent().getBooleanExtra(
         AbstractWidgetKt.EXTRA_START_FROM_WIDGET_DATA_ENTRY, false);
@@ -332,11 +317,7 @@ public class MyApplication extends MultiDexApplication implements
     Timber.i("reading last pause : %d", lastPause);
     boolean isPostDelay = System.nanoTime() - lastPause > (prefHandler.getInt(PrefKey.PROTECTION_DELAY_SECONDS, 15) * 1000000000L);
     boolean isDataEntryEnabled = prefHandler.getBoolean(PrefKey.PROTECTION_ENABLE_DATA_ENTRY_FROM_WIDGET, false);
-    if (isProtected && isPostDelay && !(isDataEntryEnabled && isStartFromWidget)) {
-      setLocked(true);
-      return true;
-    }
-    return false;
+    return isProtected && isPostDelay && !(isDataEntryEnabled && isStartFromWidget);
   }
 
   public boolean isProtected() {
@@ -366,8 +347,7 @@ public class MyApplication extends MultiDexApplication implements
         String found = DbUtils.getString(c, 0);
         String expected = prefHandler.getString(PrefKey.PLANNER_CALENDAR_PATH, "");
         if (!found.equals(expected)) {
-          CrashHandler.report(String.format(
-              "found calendar, but path did not match; expected %s ; got %s", expected, found));
+          CrashHandler.report("found calendar, but path did not match");
           result = false;
         } else {
           int syncEvents = c.getInt(1);
@@ -552,6 +532,20 @@ public class MyApplication extends MultiDexApplication implements
     return updated > 0;
   }
 
+  private void controlWebUi(boolean start) {
+    final Intent intent = WebUiViewModel.Companion.getServiceIntent();
+    intent.setAction(start ? START_ACTION : STOP_ACTION);
+    ComponentName componentName;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && start) {
+      componentName = startForegroundService(intent);
+    } else {
+      componentName = startService(intent);
+    }
+    if (componentName == null) {
+      CrashHandler.report("Start of Web User Interface failed");
+    }
+  }
+
   @Override
   public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
                                         String key) {
@@ -560,6 +554,9 @@ public class MyApplication extends MultiDexApplication implements
     }
     if (key.equals(prefHandler.getKey(DEBUG_LOGGING))) {
       setupLogging();
+    }
+    else if (key.equals(prefHandler.getKey(UI_WEB))) {
+      controlWebUi(sharedPreferences.getBoolean(key, false));
     }
     // TODO: move to TaskExecutionFragment
     else if (key.equals(prefHandler.getKey(PrefKey.PLANNER_CALENDAR_ID))) {
@@ -639,23 +636,6 @@ public class MyApplication extends MultiDexApplication implements
       } else {
         prefHandler.remove(PrefKey.PLANNER_CALENDAR_PATH);
       }
-    }
-  }
-
-  private class WidgetObserver extends ContentObserver {
-    /**
-     *
-     */
-    private Class<? extends AbstractWidget> mProvider;
-
-    WidgetObserver(Class<? extends AbstractWidget> provider) {
-      super(null);
-      mProvider = provider;
-    }
-
-    @Override
-    public void onChange(boolean selfChange) {
-      AbstractWidgetKt.updateWidgets(mSelf, mProvider, AbstractWidgetKt.WIDGET_LIST_DATA_CHANGED);
     }
   }
 

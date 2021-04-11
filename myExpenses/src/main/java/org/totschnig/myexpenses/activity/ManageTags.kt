@@ -14,11 +14,10 @@ class ManageTags: ProtectedFragmentActivity() {
         manage, select_mapping, select_filter
     }
     override fun onCreate(savedInstanceState: Bundle?) {
-        setTheme(themeIdEditDialog)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_tags)
         setupToolbar(true)
-        configureFloatingActionButton(R.string.content_description_tags_confirm)
+        configureFloatingActionButton(R.string.content_description_tags_confirm, R.drawable.ic_menu_done)
         val action = intent?.action ?: ACTION_SELECT_MAPPING
         setTitle(when(action) {
             ACTION_MANAGE -> R.string.tags
@@ -31,9 +30,7 @@ class ManageTags: ProtectedFragmentActivity() {
             else -> HelpVariant.select_mapping
         })
         if (action == ACTION_MANAGE) {
-            floatingActionButton.visibility = View.GONE
-        } else {
-            floatingActionButton.setImageResource(R.drawable.ic_menu_done)
+            floatingActionButton?.visibility = View.GONE
         }
     }
 

@@ -3,11 +3,11 @@ package org.totschnig.myexpenses.delegate
 import android.os.Bundle
 import android.text.Editable
 import android.view.View
-import com.google.android.material.snackbar.Snackbar
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.activity.ExpenseEdit
 import org.totschnig.myexpenses.contract.TransactionsContract
 import org.totschnig.myexpenses.databinding.DateEditBinding
+import org.totschnig.myexpenses.databinding.MethodRowBinding
 import org.totschnig.myexpenses.databinding.OneExpenseBinding
 import org.totschnig.myexpenses.model.ContribFeature
 import org.totschnig.myexpenses.model.ISplit
@@ -18,8 +18,8 @@ import org.totschnig.myexpenses.preference.PrefKey
 import org.totschnig.myexpenses.ui.MyTextWatcher
 import org.totschnig.myexpenses.viewmodel.data.Account
 
-class SplitDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, prefHandler: PrefHandler, isTemplate: Boolean) :
-        MainDelegate<ISplit>(viewBinding, dateEditBinding, prefHandler, isTemplate) {
+class SplitDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, methodRowBinding: MethodRowBinding, prefHandler: PrefHandler, isTemplate: Boolean) :
+        MainDelegate<ISplit>(viewBinding, dateEditBinding, methodRowBinding, prefHandler, isTemplate) {
     override val operationType = TransactionsContract.Transactions.TYPE_SPLIT
 
     override val helpVariant: ExpenseEdit.HelpVariant
@@ -43,9 +43,9 @@ class SplitDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBin
     override fun buildMainTransaction(accountId: Long): ISplit = if (isTemplate) buildTemplate(accountId) else SplitTransaction(accountId)
 
     override fun prepareForNew() {
+        super.prepareForNew()
         rowId =  SplitTransaction.getNewInstance(accountId!!).id
-        host.findSplitPartList()?.updateParent(rowId!!)
-        resetAmounts()
+        host.findSplitPartList()?.updateParent(rowId)
     }
 
     override fun configureType() {
@@ -55,12 +55,12 @@ class SplitDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBin
 
     override fun setAccounts(data: List<Account>, currencyExtra: String?) {
         super.setAccounts(data, currencyExtra)
-        host.addSplitPartList()
+        host.addSplitPartList(rowId)
     }
 
     override fun updateAccount(account: Account) {
         super.updateAccount(account)
-        host.updateSplitPartList(account)
+        host.updateSplitPartList(account, rowId)
     }
 
     fun onUncommitedSplitPartsMoved(success: Boolean) {
@@ -74,8 +74,7 @@ class SplitDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBin
                     break
                 }
             }
-            host.showSnackbar(host.getString(R.string.warning_cannot_move_split_transaction, account.label),
-                    Snackbar.LENGTH_LONG)
+            host.showSnackbar(host.getString(R.string.warning_cannot_move_split_transaction, account.label))
         }
     }
 

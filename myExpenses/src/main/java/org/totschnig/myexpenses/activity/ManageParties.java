@@ -21,8 +21,6 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 
-import com.google.android.material.snackbar.Snackbar;
-
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.fragment.ContextualActionBarFragment;
 import org.totschnig.myexpenses.fragment.PartiesList;
@@ -49,7 +47,6 @@ public class ManageParties extends ProtectedFragmentActivity implements
   @Override
   public void onCreate(Bundle savedInstanceState) {
     String action = getAction();
-    setTheme(getThemeIdEditDialog());
     super.onCreate(savedInstanceState);
     setContentView(R.layout.manage_parties);
     setupToolbar(true);
@@ -119,8 +116,7 @@ public class ManageParties extends ProtectedFragmentActivity implements
   public void onPostExecute(Uri result) {
     if (result == null) {
       showSnackbar(getString(R.string.already_defined,
-              mParty != null ? mParty.getName() : ""),
-          Snackbar.LENGTH_LONG);
+              mParty != null ? mParty.getName() : ""));
     }
     super.onPostExecute(result);
   }

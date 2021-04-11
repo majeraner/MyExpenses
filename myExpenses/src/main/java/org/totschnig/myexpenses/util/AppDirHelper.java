@@ -5,6 +5,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.webkit.MimeTypeMap;
 
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
@@ -30,7 +31,6 @@ public class AppDirHelper {
   /**
    * @return the directory user has configured in the settings, if not configured yet
    * returns {@link android.content.ContextWrapper#getExternalFilesDir(String)} with argument null
-   * @param context
    */
   @Nullable
   public static DocumentFile getAppDir(Context context) {
@@ -67,56 +67,58 @@ public class AppDirHelper {
   }
 
   /**
-   * @param parentDir
-   * @param prefix
-   * @param addExtension
    * @return creates a file object in parentDir, with a timestamp appended to
    * prefix as name, if the file already exists it appends a numeric
    * postfix
    */
-  public static DocumentFile timeStampedFile(DocumentFile parentDir, String prefix,
+  public static DocumentFile timeStampedFile(@NonNull DocumentFile parentDir, String prefix,
                                              String mimeType, String addExtension) {
     String now = new SimpleDateFormat("yyyMMdd-HHmmss", Locale.US)
         .format(new Date());
-    return buildFile(parentDir, prefix + "-" + now, mimeType, addExtension, false);
+    String name = prefix + "-" + now;
+    if (addExtension != null) {
+      name += "." + addExtension;
+    }
+    return buildFile(parentDir, name, mimeType, false, false);
   }
 
   @Nullable
-  public static DocumentFile buildFile(DocumentFile parentDir, String base,
-                                       String mimeType, String addExtension, boolean allowExisting) {
-    int postfix = 0;
-    do {
-      String name = base;
-      if (postfix > 0) {
-        name += "_" + postfix;
+  public static DocumentFile buildFile(@NonNull final DocumentFile parentDir, final String fileName,
+                                       final String mimeType, final boolean allowExisting,
+                                       final boolean supplementExtension) {
+    //createFile supplements extension on known mimeTypes, if the mime type is not known, we take care of it
+    String supplementedFilename = String.format(Locale.ROOT, "%s.%s", fileName, mimeType.split("/")[1]);
+    String fileNameToCreate = fileName;
+    if (supplementExtension) {
+      final String extensionFromMimeType = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType);
+      if (extensionFromMimeType == null) {
+        fileNameToCreate = supplementedFilename;
       }
-      if (addExtension != null) {
-        name += "." + addExtension;
-      }
-      final DocumentFile existingFile = parentDir.findFile(name);
-      if (existingFile == null) {
-        DocumentFile result = null;
-        try {
-          result = parentDir.createFile(mimeType, name);
-          if (result == null || !result.canWrite()) {
-            String message = result == null ? "createFile returned null" : "createFile returned unwritable file";
-            Map<String, String> customData = new HashMap<>();
-            customData.put("mimeType", mimeType);
-            customData.put("name", name);
-            customData.put("parent", parentDir.getUri().toString());
-            CrashHandler.report(new Exception(message), customData);
-          }
-        } catch (SecurityException e) {
-          CrashHandler.report(e);
-        }
-        return result;
-      } else if (allowExisting) {
+    }
+    if (allowExisting) {
+      DocumentFile existingFile = parentDir.findFile(supplementedFilename);
+      if (existingFile != null) {
         return existingFile;
       }
-      postfix++;
-    } while (true);
+    }
+    DocumentFile result = null;
+    try {
+      result = parentDir.createFile(mimeType, fileNameToCreate);
+      if (result == null || !result.canWrite()) {
+        String message = result == null ? "createFile returned null" : "createFile returned unwritable file";
+        Map<String, String> customData = new HashMap<>();
+        customData.put("mimeType", mimeType);
+        customData.put("name", fileName);
+        customData.put("parent", parentDir.getUri().toString());
+        CrashHandler.report(new Exception(message), customData);
+      }
+    } catch (SecurityException e) {
+      CrashHandler.report(e);
+    }
+    return result;
   }
 
+  @Nullable
   public static DocumentFile newDirectory(DocumentFile parentDir, String base) {
     int postfix = 0;
     do {

@@ -62,8 +62,8 @@ public class Payee extends Model {
   public static final String[] PROJECTION = new String[]{
       KEY_ROWID,
       KEY_PAYEE_NAME,
-      "(select count(*) from " + TABLE_TRANSACTIONS + " WHERE " + KEY_PAYEEID + "=" + TABLE_PAYEES + "." + KEY_ROWID + ") AS " + KEY_MAPPED_TRANSACTIONS,
-      "(select count(*) from " + TABLE_TEMPLATES + " WHERE " + KEY_PAYEEID + "=" + TABLE_PAYEES + "." + KEY_ROWID + ") AS " + KEY_MAPPED_TEMPLATES
+      "exists (select 1 from " + TABLE_TRANSACTIONS + " WHERE " + KEY_PAYEEID + "=" + TABLE_PAYEES + "." + KEY_ROWID + ") AS " + KEY_MAPPED_TRANSACTIONS,
+      "exists (select 1 from " + TABLE_TEMPLATES + " WHERE " + KEY_PAYEEID + "=" + TABLE_PAYEES + "." + KEY_ROWID + ") AS " + KEY_MAPPED_TEMPLATES
   };
   public static final Uri CONTENT_URI = TransactionProvider.PAYEES_URI;
 
@@ -115,6 +115,14 @@ public class Payee extends Model {
     }
   }
 
+  public static long findOrWrite(String name) {
+    long id = find(name);
+    if (id == -1) {
+      id = maybeWrite(name);
+    }
+    return id;
+  }
+
   /**
    * @param name
    * @return id of new record, or -1, if it already exists
@@ -133,10 +141,7 @@ public class Payee extends Model {
   public static long extractPayeeId(String payeeName, Map<String, Long> payeeToId) {
     Long id = payeeToId.get(payeeName);
     if (id == null) {
-      id = Payee.find(payeeName);
-      if (id == -1) {
-        id = Payee.maybeWrite(payeeName);
-      }
+      id = Payee.findOrWrite(payeeName);
       if (id != -1) { //should always be the case
         payeeToId.put(payeeName, id);
       }
@@ -163,7 +168,6 @@ public class Payee extends Model {
         cr().update(CONTENT_URI.buildUpon().appendPath(String.valueOf(getId())).build(),
             initialValues, null, null);
       } catch (SQLiteConstraintException e) {
-        // TODO Auto-generated catch block
         uri = null;
       }
     }

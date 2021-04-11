@@ -5,37 +5,37 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.android.setupwizardlib.SetupWizardLayout;
-
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.activity.SplashActivity;
+import org.totschnig.myexpenses.activity.OnboardingActivity;
+import org.totschnig.myexpenses.databinding.OnboardingWizzardBinding;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
-import butterknife.BindView;
-import butterknife.ButterKnife;
 
 public abstract class OnboardingFragment extends Fragment {
+  private OnboardingWizzardBinding binding;
   View nextButton;
   protected Toolbar toolbar;
-  @BindView(R.id.setup_wizard_layout)
-  SetupWizardLayout setupWizardLayout;
 
   @Nullable
   @Override
   public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-    View view = inflater.inflate(getLayoutResId(), container, false);
-    ButterKnife.bind(this, view);
-    configureNavigation(view, inflater);
-    configureView(view, savedInstanceState);
-    //lead
-    setupWizardLayout.setHeaderText(getTitle());
-    setupWizardLayout.setIllustration(R.drawable.bg_setup_header, R.drawable.bg_header_horizontal_tile);
-    return view;
+    binding = OnboardingWizzardBinding.inflate(inflater, container, false);
+    configureNavigation(binding.getRoot(), inflater);
+    binding.onboardingContent.setLayoutResource(getLayoutResId());
+    bindView(binding.onboardingContent.inflate());
+    binding.setupWizardLayout.setHeaderText(getTitle());
+    binding.setupWizardLayout.setIllustration(R.drawable.bg_setup_header, R.drawable.bg_header_horizontal_tile);
+    return binding.getRoot();
+  }
 
+  @Override
+  public void onViewStateRestored(@Nullable Bundle savedInstanceState) {
+    super.onViewStateRestored(savedInstanceState);
+    configureView(savedInstanceState);
   }
 
   protected abstract CharSequence getTitle();
@@ -67,9 +67,11 @@ public abstract class OnboardingFragment extends Fragment {
     return R.id.suw_navbar_next;
   }
 
-  protected abstract void configureView(@NonNull View view, @Nullable Bundle savedInstanceState);
+  protected abstract void configureView(@Nullable Bundle savedInstanceState);
 
   protected abstract int getLayoutResId();
+
+  abstract void bindView(@NonNull View view);
 
   protected int getMenuResId() {
     return 0;
@@ -77,12 +79,17 @@ public abstract class OnboardingFragment extends Fragment {
 
   protected void onNextButtonClicked() {
     final FragmentActivity activity = getActivity();
-    if (activity instanceof SplashActivity) {
-      ((SplashActivity) activity).navigate_next();
+    if (activity instanceof OnboardingActivity) {
+      ((OnboardingActivity) activity).navigate_next();
     }
   }
 
-  protected  void setupMenu() {
+  protected void setupMenu() {
+  }
 
+  @Override
+  public void onDestroyView() {
+    super.onDestroyView();
+    binding = null;
   }
 }

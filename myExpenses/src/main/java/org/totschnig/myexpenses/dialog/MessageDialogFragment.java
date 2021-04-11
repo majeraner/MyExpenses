@@ -21,7 +21,8 @@ import android.content.DialogInterface;
 import android.content.DialogInterface.OnClickListener;
 import android.os.Bundle;
 
-import org.totschnig.myexpenses.MyApplication;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import org.totschnig.myexpenses.R;
 
 import java.io.Serializable;
@@ -34,7 +35,7 @@ import static android.content.DialogInterface.BUTTON_NEGATIVE;
 import static android.content.DialogInterface.BUTTON_NEUTRAL;
 import static android.content.DialogInterface.BUTTON_POSITIVE;
 
-public class MessageDialogFragment extends CommitSafeDialogFragment implements OnClickListener {
+public class MessageDialogFragment extends BaseDialogFragment implements OnClickListener {
 
   private static final String KEY_TITLE = "title";
   private static final String KEY_MESSAGE = "message";
@@ -42,6 +43,18 @@ public class MessageDialogFragment extends CommitSafeDialogFragment implements O
   private static final String KEY_NEUTRAL = "neutral";
   private static final String KEY_NEGATIVE = "negative";
   private static final String KEY_ICON = "icon";
+
+  public static Button noButton() {
+    return nullButton(android.R.string.cancel);
+  }
+
+  public static Button okButton() {
+    return nullButton(android.R.string.ok);
+  }
+
+  public static Button nullButton(int label) {
+    return new Button(label, R.id.NO_COMMAND, null);
+  }
 
   public static class Button implements Serializable {
     int label;
@@ -60,34 +73,11 @@ public class MessageDialogFragment extends CommitSafeDialogFragment implements O
       this.keepDialogOpen = keepDialogOpen;
     }
 
-    public static Button noButton() {
-      return nullButton(android.R.string.cancel);
-    }
-
-    public static Button okButton() {
-      return nullButton(android.R.string.ok);
-    }
-
-    public static Button nullButton(int label) {
-      return new Button(label, R.id.NO_COMMAND, null);
-    }
   }
 
   public static MessageDialogFragment newInstance(
-      int title, int message, Button positive, Button neutral, Button negative) {
-    return newInstance(title, MyApplication.getInstance().getString(message),
-        positive, neutral, negative);
-  }
-
-  public static MessageDialogFragment newInstance(
-      int title, CharSequence message, Button positive, Button neutral, Button negative) {
+      CharSequence title, CharSequence message, Button positive, Button neutral, Button negative) {
    return newInstance(title, message, positive, neutral, negative, 0);
-  }
-
-  public static MessageDialogFragment newInstance(
-      int title, CharSequence message, Button positive, Button neutral, Button negative, int icon) {
-    return newInstance(title == 0 ? null : MyApplication.getInstance().getString(title),
-        message, positive, neutral, negative, icon);
   }
 
   public static MessageDialogFragment newInstance(
@@ -107,9 +97,9 @@ public class MessageDialogFragment extends CommitSafeDialogFragment implements O
   @NonNull
   @Override
   public Dialog onCreateDialog(Bundle savedInstanceState) {
-    final Bundle bundle = getArguments();
-    Activity ctx = getActivity();
-    AlertDialog.Builder builder = new AlertDialog.Builder(ctx)
+    final Bundle bundle = requireArguments();
+    Activity ctx = requireActivity();
+    AlertDialog.Builder builder = new MaterialAlertDialogBuilder(ctx)
         .setMessage(bundle.getCharSequence(KEY_MESSAGE))
         .setTitle(bundle.getCharSequence(KEY_TITLE));
 
@@ -150,15 +140,13 @@ public class MessageDialogFragment extends CommitSafeDialogFragment implements O
 
   /**
    * prevent automatic dismiss on button click
-   * @param alertDialog
-   * @param which
    */
   private void setOnClickForward(AlertDialog alertDialog, int which) {
     alertDialog.getButton(which).setOnClickListener(v -> onClick(alertDialog, which));
   }
 
   @Override
-  public void onCancel(DialogInterface dialog) {
+  public void onCancel(@NonNull DialogInterface dialog) {
     if (getActivity() == null) {
       return;
     }
@@ -170,8 +158,8 @@ public class MessageDialogFragment extends CommitSafeDialogFragment implements O
     if (getActivity() == null) {
       return;
     }
-    Bundle bundle = getArguments();
-    Button clicked = null;
+    Bundle bundle = requireArguments();
+    Button clicked;
     switch (which) {
       case BUTTON_POSITIVE:
         clicked = (Button) bundle.getSerializable(KEY_POSITIVE);
@@ -182,8 +170,10 @@ public class MessageDialogFragment extends CommitSafeDialogFragment implements O
       case BUTTON_NEGATIVE:
         clicked = (Button) bundle.getSerializable(KEY_NEGATIVE);
         break;
+      default:
+        throw new IllegalStateException("unknown button " + which);
     }
-    if (clicked.command == R.id.NO_COMMAND) {
+    if (clicked == null || clicked.command == R.id.NO_COMMAND) {
       onCancel(dialog);
     } else {
       ((MessageDialogListener) getActivity())

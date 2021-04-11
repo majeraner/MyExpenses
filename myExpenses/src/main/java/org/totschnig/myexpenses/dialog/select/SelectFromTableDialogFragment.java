@@ -30,11 +30,12 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.squareup.sqlbrite3.BriteContentResolver;
 
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.dialog.CommitSafeDialogFragment;
+import org.totschnig.myexpenses.dialog.BaseDialogFragment;
 import org.totschnig.myexpenses.util.SparseBooleanArrayParcelable;
 
 import javax.inject.Inject;
@@ -50,7 +51,7 @@ import static android.widget.AbsListView.CHOICE_MODE_NONE;
 import static android.widget.AdapterView.INVALID_ROW_ID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID;
 
-public abstract class SelectFromTableDialogFragment extends CommitSafeDialogFragment implements OnClickListener {
+public abstract class SelectFromTableDialogFragment extends BaseDialogFragment implements OnClickListener {
 
   private static final String KEY_CHECKED_POSITIONS = "checked_positions";
   public static final String KEY_DIALOG_TITLE = "dialog_tile";
@@ -68,11 +69,13 @@ public abstract class SelectFromTableDialogFragment extends CommitSafeDialogFrag
   }
 
   protected int getDialogTitle() {
-    return getArguments().getInt(KEY_DIALOG_TITLE);
+    return 0;
   }
 
+  @NonNull
   abstract Uri getUri();
 
+  @NonNull
   abstract String getColumn();
 
   @Nullable
@@ -88,7 +91,7 @@ public abstract class SelectFromTableDialogFragment extends CommitSafeDialogFrag
   @Override
   public void onCreate(@Nullable Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    MyApplication.getInstance().getAppComponent().inject(this);
+    ((MyApplication) requireActivity().getApplication()).getAppComponent().inject(this);
   }
 
   @Override
@@ -179,7 +182,7 @@ public abstract class SelectFromTableDialogFragment extends CommitSafeDialogFrag
         });
 
     final int neutralButton = getNeutralButton();
-    final AlertDialog.Builder builder = new AlertDialog.Builder(getActivity())
+    final AlertDialog.Builder builder = new MaterialAlertDialogBuilder(getActivity())
         .setAdapter(adapter, null)
         .setPositiveButton(getPositiveButton(), null)
         .setNegativeButton(getNegativeButton(), null);

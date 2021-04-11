@@ -38,14 +38,18 @@ import org.totschnig.myexpenses.util.Utils;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Locale;
 
+import androidx.annotation.Nullable;
 import androidx.cursoradapter.widget.ResourceCursorAdapter;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 
+import static org.totschnig.myexpenses.preference.PrefKey.CRITERION_FUTURE;
 import static org.totschnig.myexpenses.preference.PrefKey.GROUP_MONTH_STARTS;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ACCOUNT_LABEL;
+import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ACCOUNT_TYPE;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_AMOUNT;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CATID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_COLOR;
@@ -85,6 +89,7 @@ public class TransactionAdapter extends ResourceCursorAdapter {
   private int columnIndexColor;
   private int columnIndexLabelMain;
   private int columnIndexAccountLabel;
+  private int columIndexAccountType;
   private int columnIndexStatus;
   private int columnIndexLabelSub;
   private int columnIndexReferenceNumber;
@@ -102,7 +107,7 @@ public class TransactionAdapter extends ResourceCursorAdapter {
 
   private Context context;
 
-  private long startOfNextDay;
+  private long futureCriterion;
 
   protected TransactionAdapter(Grouping grouping, Context context, int layout,
                                Cursor c, int flags, CurrencyFormatter currencyFormatter,
@@ -112,8 +117,8 @@ public class TransactionAdapter extends ResourceCursorAdapter {
       insideFragment = true;
     }
     this.context = context;
-    colorIncome = ((ProtectedFragmentActivity) context).getColorIncome();
-    colorExpense = ((ProtectedFragmentActivity) context).getColorExpense();
+    colorIncome = context.getResources().getColor(R.color.colorIncome);
+    colorExpense = context.getResources().getColor(R.color.colorExpense);
     textColorSecondary = ((ProtectedFragmentActivity) context).getTextColorSecondary();
     mGroupingOverride = grouping;
     is24HourFormat = android.text.format.DateFormat.is24HourFormat(context);
@@ -149,7 +154,7 @@ public class TransactionAdapter extends ResourceCursorAdapter {
     }
     viewHolder.date.setEms(dateEms);
     final long date = cursor.getLong(columnIndexDate);
-    ((FrameLayout) view).setForeground(date  > startOfNextDay ? new ColorDrawable(getColorForFutureTransactions()) : null);
+    ((FrameLayout) view).setForeground(date  > futureCriterion ? new ColorDrawable(context.getResources().getColor(R.color.future_background)) : null);
     viewHolder.date.setText(itemDateFormat != null ?
         Utils.convDateTime(date, itemDateFormat) : null);
     final boolean isTransfer = DbUtils.getLongOrNull(cursor, columnIndexTransferPeer) != null;
@@ -236,7 +241,7 @@ public class TransactionAdapter extends ResourceCursorAdapter {
       status = CrStatus.UNRECONCILED;
     }
 
-    if (!mAccount.getType().equals(AccountType.CASH) && !status.equals(CrStatus.VOID)) {
+    if (!cursor.getString(columIndexAccountType).equals(AccountType.CASH.name()) && !status.equals(CrStatus.VOID)) {
       viewHolder.color1.setBackgroundColor(status.color);
       viewHolder.colorContainer.setTag(status == CrStatus.RECONCILED ? -1 : cursor.getLong(columnIndexRowId));
       viewHolder.colorContainer.setVisibility(View.VISIBLE);
@@ -246,16 +251,6 @@ public class TransactionAdapter extends ResourceCursorAdapter {
     viewHolder.voidMarker.setVisibility(status.equals(CrStatus.VOID) ? View.VISIBLE : View.GONE);
   }
 
-  private int getColorForFutureTransactions() {
-    switch (((ProtectedFragmentActivity) context).getThemeType()) {
-      case dark:
-        return 0x11FFFFFF;
-      case light:
-      default:
-        return 0x11000000;
-    }
-  }
-
   /**
    * @param catText
    * @param label_sub
@@ -263,11 +258,15 @@ public class TransactionAdapter extends ResourceCursorAdapter {
    * be displayed about the mapped category, can be overridden by subclass
    * should not be used for handle transfers
    */
-  protected CharSequence getCatText(CharSequence catText, String label_sub) {
+  protected CharSequence getCatText(CharSequence catText, @Nullable String label_sub) {
     if (label_sub != null && label_sub.length() > 0) {
       catText = catText + TransactionList.CATEGORY_SEPARATOR + label_sub;
     }
     return catText;
+  }
+
+  private Locale localeFromContext() {
+    return Utils.localeFromContext(context);
   }
 
   public void refreshDateFormat() {
@@ -285,19 +284,19 @@ public class TransactionAdapter extends ResourceCursorAdapter {
       case MONTH:
         //noinspection SimpleDateFormat
         if (monthStart == 1) {
-          itemDateFormat = new SimpleDateFormat("dd");
+          itemDateFormat = new SimpleDateFormat("dd", localeFromContext());
           dateEms = 2;
         } else {
-          itemDateFormat = Utils.localizedYearlessDateFormat(context);
+          itemDateFormat = Utils.localizedYearLessDateFormat(context);
         }
         break;
       case WEEK:
         //noinspection SimpleDateFormat
         dateEms = 2;
-        itemDateFormat = new SimpleDateFormat("EEE");
+        itemDateFormat = new SimpleDateFormat("EEE", localeFromContext());
         break;
       case YEAR:
-        itemDateFormat = Utils.localizedYearlessDateFormat(context);
+        itemDateFormat = Utils.localizedYearLessDateFormat(context);
         break;
       case NONE:
         itemDateFormat = Utils.ensureDateFormatWithShortYear(context);
@@ -307,7 +306,7 @@ public class TransactionAdapter extends ResourceCursorAdapter {
 
   @Override
   public Cursor swapCursor(Cursor cursor) {
-    startOfNextDay = LocalDate.now().plusDays( 1 ).atStartOfDay().atZone(ZoneId.systemDefault()).toEpochSecond();
+    futureCriterion = "current".equals(prefHandler.getString(CRITERION_FUTURE, "end_of_day")) ? System.currentTimeMillis() / 1000 :  LocalDate.now().plusDays( 1 ).atStartOfDay().atZone(ZoneId.systemDefault()).toEpochSecond();
     if (!indexesCalculated) {
       columnIndexDate = cursor.getColumnIndex(KEY_DATE);
       columnIndexCurrency = cursor.getColumnIndex(KEY_CURRENCY);
@@ -317,6 +316,7 @@ public class TransactionAdapter extends ResourceCursorAdapter {
       columnIndexLabelMain = cursor.getColumnIndex(KEY_LABEL_MAIN);
       columnIndexTransferPeer = cursor.getColumnIndex(KEY_TRANSFER_PEER);
       columnIndexAccountLabel = cursor.getColumnIndex(KEY_ACCOUNT_LABEL);
+      columIndexAccountType = cursor.getColumnIndex(KEY_ACCOUNT_TYPE);
       columnIndexStatus = cursor.getColumnIndex(KEY_STATUS);
       columnIndexLabelSub = cursor.getColumnIndex(KEY_LABEL_SUB);
       columnIndexReferenceNumber = cursor.getColumnIndex(KEY_REFERENCE_NUMBER);

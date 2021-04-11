@@ -11,17 +11,19 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ExpandableListView;
 import android.widget.Toast;
 
 import com.annimon.stream.Stream;
 import com.google.android.material.chip.ChipGroup;
-import com.google.android.material.snackbar.Snackbar;
 
+import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.activity.BudgetEdit;
 import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
 import org.totschnig.myexpenses.adapter.BudgetAdapter;
-import org.totschnig.myexpenses.model.CurrencyUnit;
+import org.totschnig.myexpenses.databinding.BudgetListBinding;
+import org.totschnig.myexpenses.databinding.BudgetRowBinding;
 import org.totschnig.myexpenses.model.Grouping;
 import org.totschnig.myexpenses.model.Money;
 import org.totschnig.myexpenses.model.Sort;
@@ -31,6 +33,7 @@ import org.totschnig.myexpenses.provider.filter.FilterPersistence;
 import org.totschnig.myexpenses.ui.BudgetSummary;
 import org.totschnig.myexpenses.util.TextUtils;
 import org.totschnig.myexpenses.viewmodel.BudgetViewModel;
+import org.totschnig.myexpenses.viewmodel.data.DistributionAccountInfo;
 import org.totschnig.myexpenses.viewmodel.data.Budget;
 import org.totschnig.myexpenses.viewmodel.data.Category;
 
@@ -41,8 +44,7 @@ import java.util.Locale;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
-import androidx.lifecycle.ViewModelProviders;
-import butterknife.ButterKnife;
+import androidx.lifecycle.ViewModelProvider;
 import eltos.simpledialogfragment.SimpleDialog;
 import eltos.simpledialogfragment.form.AmountEdit;
 import eltos.simpledialogfragment.form.SimpleFormDialog;
@@ -55,11 +57,12 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID;
 import static org.totschnig.myexpenses.util.MoreUiUtilsKt.addChipsBulk;
 import static org.totschnig.myexpenses.util.TextUtils.appendCurrencySymbol;
 
-public class BudgetFragment extends DistributionBaseFragment implements
+public class BudgetFragment extends DistributionBaseFragment<BudgetRowBinding> implements
     BudgetAdapter.OnBudgetClickListener, SimpleDialog.OnDialogResultListener {
   private Budget budget;
   BudgetSummary budgetSummary;
   ChipGroup filterGroup;
+  private BudgetListBinding binding;
   public static final String EDIT_BUDGET_DIALOG = "EDIT_BUDGET";
   private static final String DELETE_BUDGET_DIALOG = "DELETE_BUDGET";
 
@@ -96,19 +99,35 @@ public class BudgetFragment extends DistributionBaseFragment implements
   }
 
   @Override
+  ExpandableListView getListView() {
+    return binding.list;
+  }
+
+  @Override
+  public void onCreate(Bundle savedInstanceState) {
+    ((MyApplication) requireActivity().getApplication()).getAppComponent().inject(this);
+    super.onCreate(savedInstanceState);
+  }
+
+  @Override
   public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-    View view = inflater.inflate(R.layout.budget_list, container, false);
-    ButterKnife.bind(this, view);
-    budgetSummary = (BudgetSummary) inflater.inflate(R.layout.budget_fragment_summary, mListView, false);
+    binding = BudgetListBinding.inflate(inflater, container, false);
+    budgetSummary = (BudgetSummary) inflater.inflate(R.layout.budget_fragment_summary, getListView(), false);
     budgetSummary.setOnBudgetClickListener(view1 -> onBudgetClick(null, null));
-    filterGroup = (ChipGroup) inflater.inflate(R.layout.budget_filter, mListView, false);
-    registerForContextMenu(mListView);
-    return view;
+    filterGroup = (ChipGroup) inflater.inflate(R.layout.budget_filter, getListView(), false);
+    registerForContextMenu(getListView());
+    return binding.getRoot();
+  }
+
+  @Override
+  public void onDestroyView() {
+    super.onDestroyView();
+    binding = null;
   }
 
   @Override
   public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-    viewModel = ViewModelProviders.of(this).get(BudgetViewModel.class);
+    viewModel = new ViewModelProvider(this).get(BudgetViewModel.class);
     viewModel.getBudget().observe(getViewLifecycleOwner(), this::setBudget);
     viewModel.getDatabaseResult().observe(getViewLifecycleOwner(), success -> {
       Activity activity = getActivity();
@@ -121,36 +140,33 @@ public class BudgetFragment extends DistributionBaseFragment implements
         }
       }
     });
-    final long budgetId = getActivity().getIntent().getLongExtra(KEY_ROWID, 0);
-    loadBudget(budgetId);
+    final long budgetId = requireActivity().getIntent().getLongExtra(KEY_ROWID, 0);
+    viewModel.loadBudget(budgetId, false);
     filterPersistence = new FilterPersistence(prefHandler, BudgetViewModel.Companion.prefNameForCriteria(budgetId), null, false, true);
   }
 
   @Override
   public boolean onOptionsItemSelected(@NonNull MenuItem item) {
     if (budget != null) {
-      switch (item.getItemId()) {
-        case R.id.EDIT_COMMAND: {
-          Intent intent = new Intent(getActivity(), BudgetEdit.class);
-          intent.putExtra(KEY_ROWID, budget.getId());
-          startActivity(intent);
-          return true;
-        }
-        case R.id.DELETE_COMMAND: {
-          SimpleDialog.build()
-              .title(R.string.dialog_title_warning_delete_budget)
-              .msg(getString(R.string.warning_delete_budget, budget.getTitle()) + " " + getString(R.string.continue_confirmation))
-              .pos(R.string.menu_delete)
-              .neg(android.R.string.cancel)
-              .show(this, DELETE_BUDGET_DIALOG);
-          return true;
-        }
-        case R.id.BUDGET_ALLOCATED_ONLY: {
-          allocatedOnly = !allocatedOnly;
-          prefHandler.putBoolean(getTemplateForAllocatedOnlyKey(budget), allocatedOnly);
-          reset();
-          return true;
-        }
+      int itemId = item.getItemId();
+      if (itemId == R.id.EDIT_COMMAND) {
+        Intent intent = new Intent(getActivity(), BudgetEdit.class);
+        intent.putExtra(KEY_ROWID, budget.getId());
+        startActivity(intent);
+        return true;
+      } else if (itemId == R.id.DELETE_COMMAND) {
+        SimpleDialog.build()
+            .title(R.string.dialog_title_warning_delete_budget)
+            .msg(getString(R.string.warning_delete_budget, budget.getTitle()) + " " + getString(R.string.continue_confirmation))
+            .pos(R.string.menu_delete)
+            .neg(android.R.string.cancel)
+            .show(this, DELETE_BUDGET_DIALOG);
+        return true;
+      } else if (itemId == R.id.BUDGET_ALLOCATED_ONLY) {
+        allocatedOnly = !allocatedOnly;
+        prefHandler.putBoolean(getTemplateForAllocatedOnlyKey(budget), allocatedOnly);
+        reset();
+        return true;
       }
     }
     return super.onOptionsItemSelected(item);
@@ -159,27 +175,26 @@ public class BudgetFragment extends DistributionBaseFragment implements
   private void showEditBudgetDialog(Category category, Category parentItem) {
     final Money amount, max, min;
     final SimpleFormDialog simpleFormDialog = SimpleFormDialog.build()
-        .title(category == null ? getString(R.string.dialog_title_edit_budget) : category.label)
+        .title(category == null ? getString(R.string.dialog_title_edit_budget) : category.getLabel())
         .neg();
     if (category != null) {
       long allocated = parentItem == null ? getAllocated() :
-          Stream.of(parentItem.getChildren()).mapToLong(category1 -> category1.budget).sum();
-      final Long budgetAmount = parentItem == null ? budget.getAmount().getAmountMinor() : parentItem.budget;
+          Stream.of(parentItem.getChildren()).mapToLong(Category::getBudget).sum();
+      final long budgetAmount = parentItem == null ? budget.getAmount().getAmountMinor() : parentItem.getBudget();
       long allocatable = budgetAmount - allocated;
-      final long maxLong = allocatable + category.budget;
+      final long maxLong = allocatable + category.getBudget();
       if (maxLong <= 0) {
-        ((ProtectedFragmentActivity) getActivity()).showSnackbar(TextUtils.concatResStrings(getActivity(), " ",
+        ((ProtectedFragmentActivity) requireActivity()).showSnackbar(TextUtils.concatResStrings(getActivity(), " ",
             parentItem == null ? R.string.budget_exceeded_error_1_2 : R.string.sub_budget_exceeded_error_1_2,
-            parentItem == null ? R.string.budget_exceeded_error_2 : R.string.sub_budget_exceeded_error_2),
-            Snackbar.LENGTH_LONG);
+            parentItem == null ? R.string.budget_exceeded_error_2 : R.string.sub_budget_exceeded_error_2));
         return;
       }
       Bundle bundle = new Bundle(1);
-      bundle.putLong(KEY_CATID, category.id);
+      bundle.putLong(KEY_CATID, category.getId());
       simpleFormDialog.extra(bundle);
-      amount = new Money(budget.getCurrency(), category.budget);
+      amount = new Money(budget.getCurrency(), category.getBudget());
       max = new Money(budget.getCurrency(), maxLong);
-      min = parentItem != null ? null : new Money(budget.getCurrency(), Stream.of(category.getChildren()).mapToLong(category1 -> category1.budget).sum());
+      min = parentItem != null ? null : new Money(budget.getCurrency(), Stream.of(category.getChildren()).mapToLong(Category::getBudget).sum());
     } else {
       amount = budget.getAmount();
       max = null;
@@ -199,7 +214,7 @@ public class BudgetFragment extends DistributionBaseFragment implements
                                             boolean isMainCategory, boolean isSubCategory, Context context) {
     final AmountEdit amountEdit = AmountEdit.plain(KEY_AMOUNT)
         .label(appendCurrencySymbol(context, R.string.budget_allocated_amount, amount.getCurrencyUnit()))
-        .fractionDigits(amount.getCurrencyUnit().fractionDigits()).required();
+        .fractionDigits(amount.getCurrencyUnit().getFractionDigits()).required();
     if (!(amount.getAmountMajor().compareTo(BigDecimal.ZERO) == 0)) {
       amountEdit.amount(amount.getAmountMajor());
     }
@@ -231,44 +246,30 @@ public class BudgetFragment extends DistributionBaseFragment implements
     return false;
   }
 
-  public void loadBudget(long budgetId) {
-    viewModel.loadBudget(budgetId, false);
-  }
-
   private void setBudget(@NonNull Budget budget) {
     this.budget = budget;
     filterPersistence.reloadFromPreferences();
     allocatedOnly = prefHandler.getBoolean(getTemplateForAllocatedOnlyKey(budget),false);
-    setAccountInfo(new AccountInfo() {
-      @Override
-      public long getId() {
-        return budget.getAccountId();
-      }
-
-      @Override
-      public CurrencyUnit getCurrencyUnit() {
-        return budget.getCurrency();
-      }
-    });
-    final ActionBar actionBar = ((ProtectedFragmentActivity) getActivity()).getSupportActionBar();
+    setAccountInfo(new DistributionAccountInfo(budget.getAccountId(), budget.label(requireActivity()), budget.getCurrency(), budget.getColor()));
+    final ActionBar actionBar = ((ProtectedFragmentActivity) requireActivity()).getSupportActionBar();
     actionBar.setTitle(budget.getTitle());
     if (mAdapter == null) {
-      mAdapter = new BudgetAdapter((ProtectedFragmentActivity) getActivity(), currencyFormatter,
+      mAdapter = new BudgetAdapter(getActivity(), currencyFormatter,
           budget.getCurrency(), this);
-      mListView.addHeaderView(filterGroup, null, false);
-      mListView.addHeaderView(budgetSummary, null, false);
-      mListView.setAdapter(mAdapter);
+      getListView().addHeaderView(filterGroup, null, false);
+      getListView().addHeaderView(budgetSummary, null, false);
+      getListView().setAdapter(mAdapter);
     }
 
-    mGrouping = budget.getGrouping();
-    mGroupingYear = 0;
-    mGroupingSecond = 0;
-    if (mGrouping == Grouping.NONE) {
+    setGrouping(budget.getGrouping());
+    setGroupingYear(0);
+    setGroupingSecond(0);
+    if (getGrouping() == Grouping.NONE) {
       updateSum();
       loadData();
       setSubTitle(budget.durationPrettyPrint());
     } else {
-      updateDateInfo(false);
+      updateDateInfo();
     }
     updateSummary();
     setFilterInfo();
@@ -292,33 +293,6 @@ public class BudgetFragment extends DistributionBaseFragment implements
   }
 
   @Override
-  protected void onDateInfoReceived() {
-    //we fetch dateinfo from database two times, first to get info about current date,
-    //then we use this info in second run
-    if (mGroupingYear == 0) {
-      mGroupingYear = dateInfo.getThisYear();
-      switch (mGrouping) {
-        case DAY:
-          mGroupingSecond = dateInfo.getThisDay();
-          break;
-        case WEEK:
-          mGroupingYear = dateInfo.getThisYearOfWeekStart();
-          mGroupingSecond = dateInfo.getThisWeek();
-          break;
-        case MONTH:
-          mGroupingYear = dateInfo.getThisYearOfMonthStart();
-          mGroupingSecond = dateInfo.getThisMonth();
-          break;
-      }
-      updateDateInfo(true);
-      updateSum();
-    } else {
-      super.onDateInfoReceived();
-      loadData();
-    }
-  }
-
-  @Override
   protected String buildFilterClause(String tableName) {
     String dateFilter = (budget.getGrouping() == Grouping.NONE) ? budget.durationAsSqlFilter() :
         super.buildFilterClause(tableName);
@@ -335,15 +309,15 @@ public class BudgetFragment extends DistributionBaseFragment implements
   @Override
   protected void onLoadFinished() {
     super.onLoadFinished();
-    allocated = Stream.of(mAdapter.getMainCategories()).mapToLong(category -> category.budget).sum();
+    allocated = Stream.of(mAdapter.getMainCategories()).mapToLong(Category::getBudget).sum();
     budgetSummary.setAllocated(currencyFormatter.formatCurrency(new Money(budget.getCurrency(),
         allocated)));
   }
 
   @Override
-  void updateIncomeAndExpense(long income, long expense) {
+  protected void updateIncomeAndExpense(long income, long expense) {
     this.spent = expense;
-    if (aggregateTypes) {
+    if (getAggregateTypes()) {
       this.spent -= income;
     }
     updateSummary();
@@ -358,7 +332,7 @@ public class BudgetFragment extends DistributionBaseFragment implements
   }
 
   @Override
-  public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+  public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
     inflater.inflate(R.menu.budget, menu);
   }
 
@@ -376,6 +350,7 @@ public class BudgetFragment extends DistributionBaseFragment implements
     return KEY_BUDGET;
   }
 
+  @NonNull
   @Override
   protected Uri getCategoriesUri() {
     final Uri.Builder builder = super.getCategoriesUri().buildUpon()

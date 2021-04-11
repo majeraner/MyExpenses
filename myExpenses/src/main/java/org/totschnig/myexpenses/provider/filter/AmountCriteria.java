@@ -88,7 +88,7 @@ public class AmountCriteria extends Criteria {
         break;
       case BTW:
         String amount2 = currencyFormatter.formatCurrency(new Money(currencyUnit, Math.abs(origValue2)));
-        result += MyApplication.getInstance().getString(R.string.between_and, amount1, amount2);
+        result += context.getString(R.string.between_and, amount1, amount2);
     }
     return result;
   }
@@ -103,7 +103,7 @@ public class AmountCriteria extends Criteria {
       default:
         throw new UnsupportedOperationException("Operator not supported: " + operation.name());
     }
-    Long longAmount1, longAmount2;
+    long longAmount1, longAmount2;
     longAmount1 =  type ? values[0] : -values[0];
     if (operation == Operation.BTW) {
       if (values[1] == null) {

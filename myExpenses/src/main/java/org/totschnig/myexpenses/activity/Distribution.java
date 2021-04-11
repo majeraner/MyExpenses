@@ -20,7 +20,6 @@ public class Distribution extends CategoryActivity<DistributionFragment> {
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
-    setTheme(getThemeId());
     super.onCreate(savedInstanceState);
     DisplayMetrics dm = getResources().getDisplayMetrics();
 
@@ -62,7 +61,7 @@ public class Distribution extends CategoryActivity<DistributionFragment> {
 
   @Override
   public boolean dispatchTouchEvent(MotionEvent event) {
-    if (mDetector != null && mListFragment.getGrouping() != null)
+    if (mDetector != null)
       if (!mListFragment.getGrouping().equals(Grouping.NONE) && mDetector.onTouchEvent(event)) {
         return true;
       }

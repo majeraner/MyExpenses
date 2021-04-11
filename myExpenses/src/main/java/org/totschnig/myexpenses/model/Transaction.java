@@ -52,7 +52,7 @@ import java.util.Locale;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
-import androidx.core.util.Pair;
+import kotlin.Triple;
 import timber.log.Timber;
 
 import static android.text.TextUtils.isEmpty;
@@ -165,9 +165,9 @@ public class Transaction extends AbstractTransaction {
   private String categoryIcon = null;
   private boolean isSealed = false;
 
-  transient private Pair<Plan.Recurrence, LocalDate> initialPlan;
+  transient private Triple<String, ? extends Plan.Recurrence, LocalDate> initialPlan;
 
-  public void setInitialPlan(Pair<Plan.Recurrence, LocalDate> initialPlan) {
+  public void setInitialPlan(@NonNull Triple<String, ? extends Plan.Recurrence, LocalDate> initialPlan) {
     this.initialPlan = initialPlan;
   }
 
@@ -176,9 +176,13 @@ public class Transaction extends AbstractTransaction {
    */
   private Long originTemplateId = null;
   /**
+   * the id of the calendar plan for which this transaction has been created
+   */
+  private Long originPlanId = null;
+  /**
    * id of an instance of the event (plan) for which this transaction has been created
    */
-  public Long originPlanInstanceId = null;
+  private Long originPlanInstanceId = null;
   /**
    * 0 = is normal, special states are
    * {@link org.totschnig.myexpenses.provider.DatabaseConstants#STATUS_EXPORTED} and
@@ -222,7 +226,7 @@ public class Transaction extends AbstractTransaction {
 
     //extended
     int baseLength = PROJECTION_BASE.length;
-    PROJECTION_EXTENDED = new String[baseLength + 6];
+    PROJECTION_EXTENDED = new String[baseLength + 7];
     System.arraycopy(PROJECTION_BASE, 0, PROJECTION_EXTENDED, 0, baseLength);
     PROJECTION_EXTENDED[baseLength] = KEY_COLOR;
     //the definition of column TRANSFER_PEER_PARENT refers to view_extended,
@@ -232,12 +236,14 @@ public class Transaction extends AbstractTransaction {
     PROJECTION_EXTENDED[baseLength + 3] = KEY_ACCOUNT_LABEL;
     PROJECTION_EXTENDED[baseLength + 4] = KEY_ACCOUNT_TYPE;
     PROJECTION_EXTENDED[baseLength + 5] = KEY_TAGLIST;
+    PROJECTION_EXTENDED[baseLength + 6] = KEY_PARENTID;
 
     //extended for aggregate include is_same_currecny
     int extendedLength = PROJECTION_EXTENDED.length;
-    PROJECTION_EXTENDED_AGGREGATE = new String[extendedLength + 1];
+    PROJECTION_EXTENDED_AGGREGATE = new String[extendedLength + 2];
     System.arraycopy(PROJECTION_EXTENDED, 0, PROJECTION_EXTENDED_AGGREGATE, 0, extendedLength);
     PROJECTION_EXTENDED_AGGREGATE[extendedLength] = IS_SAME_CURRENCY + " AS " + KEY_IS_SAME_CURRENCY;
+    PROJECTION_EXTENDED_AGGREGATE[extendedLength + 1] = KEY_ACCOUNTID;
 
     int aggregateLength = PROJECTION_EXTENDED_AGGREGATE.length;
     PROJECTON_EXTENDED_HOME = new String[aggregateLength + 2];
@@ -431,6 +437,17 @@ public class Transaction extends AbstractTransaction {
     this.originPlanInstanceId = originPlanInstanceId;
   }
 
+  @Nullable
+  @Override
+  public Long getOriginPlanId() {
+    return originPlanId;
+  }
+
+  @Override
+  public void setOriginPlanId(@Nullable Long originPlanId) {
+    this.originPlanId = originPlanId;
+  }
+
   @NonNull
   private CrStatus crStatus = CrStatus.UNRECONCILED;
   transient protected Uri pictureUri;
@@ -523,18 +540,34 @@ public class Transaction extends AbstractTransaction {
 
     t.status = c.getInt(c.getColumnIndexOrThrow(KEY_STATUS));
     t.originTemplateId = getLongOrNull(c, KEY_TEMPLATEID);
-    t.uuid = DbUtils.getString(c, KEY_UUID);
+    t.setUuid(DbUtils.getString(c, KEY_UUID));
     t.setSealed(c.getInt(c.getColumnIndexOrThrow(KEY_SEALED)) > 0);
     c.close();
     return t;
   }
 
-  public static Pair<Transaction, List<Tag>> getInstanceFromTemplate(long id) {
+  public static kotlin.Pair<Transaction, List<Tag>> getInstanceFromDbWithTags(long id) {
+    Transaction t = getInstanceFromDb(id);
+    return t == null ? null : new kotlin.Pair<>(t, t.loadTags());
+  }
+
+  public static kotlin.Pair<Transaction, List<Tag>> getInstanceFromTemplateWithTags(long id) {
+    Template te = Template.getInstanceFromDb(id);
+    return te == null ? null : getInstanceFromTemplateWithTags(te);
+  }
+
+  public static Transaction getInstanceFromTemplate(long id) {
     Template te = Template.getInstanceFromDb(id);
     return te == null ? null : getInstanceFromTemplate(te);
   }
 
-  public static Pair<Transaction, List<Tag>> getInstanceFromTemplate(Template te) {
+  @Nullable
+  public static kotlin.Pair<Transaction, List<Tag>> getInstanceFromTemplateIfOpen(long id, long instanceId) {
+    Template te = Template.getInstanceFromDbIfInstanceIsOpen(id, instanceId);
+    return te == null ? null : getInstanceFromTemplateWithTags(te);
+  }
+
+  public static Transaction getInstanceFromTemplate(Template te) {
     Transaction tr;
     switch (te.operationType()) {
       case TYPE_TRANSACTION:
@@ -570,9 +603,8 @@ public class Transaction extends AbstractTransaction {
       if (c != null) {
         c.moveToFirst();
         while (!c.isAfterLast()) {
-          Pair<Transaction, List<Tag>> pair = Transaction.getInstanceFromTemplate(c.getLong(c.getColumnIndex(KEY_ROWID)));
-          if (pair != null) {
-            Transaction part = pair.first;
+          Transaction part = Transaction.getInstanceFromTemplate(c.getLong(c.getColumnIndex(KEY_ROWID)));
+          if (part != null) {
             part.status = STATUS_UNCOMMITTED;
             part.setParentId(tr.getId());
             part.saveAsNew();
@@ -589,10 +621,18 @@ public class Transaction extends AbstractTransaction {
             .appendPath(TransactionProvider.URI_SEGMENT_INCREASE_USAGE)
             .build(),
         null, null, null);
+    return tr;
+  }
+
+  public static kotlin.Pair<Transaction, List<Tag>> getInstanceFromTemplateWithTags(Template te) {
+    return new kotlin.Pair<>(getInstanceFromTemplate(te), te.loadTags());
+  }
+
+  protected List<Tag> loadTags() {
     List<Tag> tags;
-    if (te.getParentId() == null) {
+    if (getParentId() == null) {
       tags = new ArrayList<>();
-      Cursor c = cr().query(te.linkedTagsUri(), null, te.linkColumn() + " = ?", new String[]{idString}, null);
+      Cursor c = cr().query(linkedTagsUri(), null, linkColumn() + " = ?", new String[]{String.valueOf(getId())}, null);
       if (c != null) {
         c.moveToFirst();
         while (!c.isAfterLast()) {
@@ -604,7 +644,7 @@ public class Transaction extends AbstractTransaction {
     } else {
       tags = null;
     }
-    return Pair.create(tr, tags);
+    return tags;
   }
 
   /**
@@ -744,18 +784,23 @@ public class Transaction extends AbstractTransaction {
     } catch (RemoteException | OperationApplicationException e) {
       return null;
     }
-    if (initialPlan != null && initialPlan.first != null && initialPlan.second != null) {
-      String title = isEmpty(getPayee()) ?
+    if (initialPlan != null) {
+      String title = initialPlan.getFirst() == null ? (isEmpty(getPayee()) ?
           (isSplit() || isEmpty(getLabel()) ?
               (isEmpty(getComment()) ?
-                  MyApplication.getInstance().getString(R.string.menu_create_template) :
-                  getComment()) : getLabel()) : getPayee();
+                  MyApplication.getInstance().getString(R.string.menu_create_template) : //TODO proper context
+                  getComment()) : getLabel()) : getPayee()) : initialPlan.getFirst();
       Template originTemplate = new Template(this, title);
-      String description = originTemplate.compileDescription(MyApplication.getInstance());
+      String description = originTemplate.compileDescription(MyApplication.getInstance()); //TODO proper context
       originTemplate.setPlanExecutionAutomatic(true);
-      originTemplate.setPlan(new Plan(initialPlan.second, initialPlan.first, title, description));
-      originTemplate.save(getId());
+      Long withLinkedTransaction = null;
+      if (initialPlan.getSecond() != Plan.Recurrence.NONE) {
+        originTemplate.setPlan(new Plan(initialPlan.getThird(), initialPlan.getSecond(), title, description));
+        withLinkedTransaction = getId();
+      }
+      originTemplate.save(withLinkedTransaction);
       originTemplateId = originTemplate.getId();
+      originPlanId = originTemplate.planId;
     }
     return uri;
   }
@@ -838,7 +883,7 @@ public class Transaction extends AbstractTransaction {
       }
     } else if (clone) {
       setId(0);
-      uuid = null;
+      setUuid(null);
     }
   }
 
@@ -933,7 +978,7 @@ public class Transaction extends AbstractTransaction {
     initialValues.put(KEY_ACCOUNTID, getAccountId());
 
     initialValues.put(KEY_ORIGINAL_AMOUNT, originalAmount == null ? null : originalAmount.getAmountMinor());
-    initialValues.put(KEY_ORIGINAL_CURRENCY, originalAmount == null ? null : originalAmount.getCurrencyUnit().code());
+    initialValues.put(KEY_ORIGINAL_CURRENCY, originalAmount == null ? null : originalAmount.getCurrencyUnit().getCode());
     initialValues.put(KEY_EQUIVALENT_AMOUNT, equivalentAmount == null ? null : equivalentAmount.getAmountMinor());
 
     savePicture(initialValues);
@@ -996,10 +1041,10 @@ public class Transaction extends AbstractTransaction {
     setPictureUri(homeUri);
   }
 
-  public void saveAsNew() {
+  public Uri saveAsNew() {
     setId(0L);
-    uuid = null;
-    save();
+    setUuid(null);
+    return save();
   }
 
   /**
@@ -1263,23 +1308,6 @@ public class Transaction extends AbstractTransaction {
     } else {
       cursor.moveToFirst();
       long result = cursor.getLong(0);
-      cursor.close();
-      return result;
-    }
-  }
-
-  protected String retrieveUuidFromDb() {
-    Cursor cursor = cr().query(CONTENT_URI,
-        new String[]{KEY_UUID}, KEY_ROWID + " = ?", new String[]{String.valueOf(getId())}, null);
-    if (cursor == null) {
-      return null;
-    }
-    if (cursor.getCount() == 0) {
-      cursor.close();
-      return null;
-    } else {
-      cursor.moveToFirst();
-      String result = cursor.getString(0);
       cursor.close();
       return result;
     }

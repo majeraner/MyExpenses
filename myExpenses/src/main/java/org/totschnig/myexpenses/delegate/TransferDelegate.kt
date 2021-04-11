@@ -11,6 +11,7 @@ import org.totschnig.myexpenses.activity.ExpenseEdit
 import org.totschnig.myexpenses.adapter.AccountAdapter
 import org.totschnig.myexpenses.contract.TransactionsContract
 import org.totschnig.myexpenses.databinding.DateEditBinding
+import org.totschnig.myexpenses.databinding.MethodRowBinding
 import org.totschnig.myexpenses.databinding.OneExpenseBinding
 import org.totschnig.myexpenses.model.CurrencyContext
 import org.totschnig.myexpenses.model.ITransfer
@@ -26,21 +27,24 @@ import org.totschnig.myexpenses.ui.SpinnerHelper
 import org.totschnig.myexpenses.viewmodel.data.Account
 import java.math.BigDecimal
 
-class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, prefHandler: PrefHandler, isTemplate: Boolean) :
-        TransactionDelegate<ITransfer>(viewBinding, dateEditBinding, prefHandler, isTemplate) {
+class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, methodRowBinding: MethodRowBinding, prefHandler: PrefHandler, isTemplate: Boolean) :
+        TransactionDelegate<ITransfer>(viewBinding, dateEditBinding, methodRowBinding, prefHandler, isTemplate) {
 
-    private  var transferAccountSpinner = SpinnerHelper(viewBinding.TransferAccount)
+    private var transferAccountSpinner = SpinnerHelper(viewBinding.TransferAccount)
 
     init {
         createTransferAccountAdapter()
     }
+
     override val operationType = TransactionsContract.Transactions.TYPE_TRANSFER
 
     private val lastExchangeRateRelevantInputs = intArrayOf(INPUT_EXCHANGE_RATE, INPUT_AMOUNT)
     private lateinit var transferAccountsAdapter: AccountAdapter
+
     @JvmField
     @State
     var mTransferAccountId: Long? = null
+
     @JvmField
     @State
     var transferPeer: Long? = null
@@ -48,8 +52,8 @@ class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
     override val helpVariant: ExpenseEdit.HelpVariant
         get() = when {
             isTemplate -> ExpenseEdit.HelpVariant.templateTransfer
-            isSplitPart -> ExpenseEdit.HelpVariant.transfer
-            else -> ExpenseEdit.HelpVariant.splitPartTransfer
+            isSplitPart -> ExpenseEdit.HelpVariant.splitPartTransfer
+            else -> ExpenseEdit.HelpVariant.transfer
         }
 
     override val typeResId = R.string.transfer
@@ -147,12 +151,12 @@ class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
         val isSame = currency == transferAccountCurrencyUnit
         setVisibility(viewBinding.TransferAmountRow, !isSame)
         setVisibility(viewBinding.ERR.root as ViewGroup, !isSame /*&& mTransaction !is Template*/)
-        addCurrencyToInput(viewBinding.TransferAmountLabel, viewBinding.TransferAmount, transferAccountCurrencyUnit.symbol(), R.string.amount)
-        viewBinding.TransferAmount.setFractionDigits(transferAccountCurrencyUnit.fractionDigits())
+        addCurrencyToInput(viewBinding.TransferAmountLabel, viewBinding.TransferAmount, transferAccountCurrencyUnit, R.string.amount)
+        viewBinding.TransferAmount.setFractionDigits(transferAccountCurrencyUnit.fractionDigits)
         viewBinding.ERR.ExchangeRate.setCurrencies(currency, transferAccountCurrencyUnit)
         //TODO check history of this dead code
         val bundle = Bundle(2)
-        bundle.putStringArray(DatabaseConstants.KEY_CURRENCY, arrayOf(currency.code(), transferAccountCurrencyUnit.code()))
+        bundle.putStringArray(DatabaseConstants.KEY_CURRENCY, arrayOf(currency.code, transferAccountCurrencyUnit.code))
     }
 
     private fun createTransferAccountAdapter() {
@@ -168,7 +172,7 @@ class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
         }
     }
 
-    fun switchAccountViews() {
+    private fun switchAccountViews() {
         val accountSpinner = accountSpinner.spinner
         val transferAccountSpinner = transferAccountSpinner.spinner
         with(viewBinding.Table) {
@@ -193,17 +197,6 @@ class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
                 addView(viewBinding.AmountRow, 2)
                 addView(viewBinding.TransferAmountRow, 4)
             }
-        }
-
-        linkAccountLabels()
-    }
-
-    override fun linkAccountLabels() {
-        with(host) {
-            linkInputWithLabel(accountSpinner.spinner,
-                    if (isIncome) viewBinding.TransferAccountLabel else viewBinding.AccountLabel)
-            linkInputWithLabel(transferAccountSpinner.spinner,
-                    if (isIncome) viewBinding.AccountLabel else viewBinding.TransferAccountLabel)
         }
     }
 
@@ -237,13 +230,13 @@ class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
     }
 
     private fun applyExchangeRate(from: AmountInput, to: AmountInput, rate: BigDecimal?) {
-        val input = validateAmountInput(from, false, true)
+        val input = validateAmountInput(from, showToUser = false, ifPresent = true)
         to.setAmount(if (rate != null && input != null) input.multiply(rate) else BigDecimal(0), false)
     }
 
     private fun updateExchangeRates() {
-        val amount = validateAmountInput(viewBinding.Amount, false, true)
-        val transferAmount = validateAmountInput(viewBinding.TransferAmount, false, true)
+        val amount = validateAmountInput(viewBinding.Amount, showToUser = false, ifPresent = true)
+        val transferAmount = validateAmountInput(viewBinding.TransferAmount, showToUser = false, ifPresent = true)
         viewBinding.ERR.ExchangeRate.calculateAndSetRate(amount, transferAmount)
     }
 
@@ -253,10 +246,10 @@ class TransferDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
         val transferAccount = transferAccount()!!
         val isSame = currentAccount.currency == transferAccount.currency
         val transferAmount: BigDecimal?
-        if (isSame && amount != null) {
-            transferAmount = amount.negate()
+        transferAmount = if (isSame && amount != null) {
+            amount.negate()
         } else {
-            transferAmount = validateAmountInput(viewBinding.TransferAmount, forSave, true)?.let {
+            validateAmountInput(viewBinding.TransferAmount, forSave, true)?.let {
                 if (isIncome) it.negate() else it
             }
         }

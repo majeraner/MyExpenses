@@ -7,25 +7,28 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.liveData
 import io.reactivex.disposables.CompositeDisposable
-import org.totschnig.myexpenses.adapter.IAccount
 import org.totschnig.myexpenses.model.AccountType
 import org.totschnig.myexpenses.model.CurrencyContext
 import org.totschnig.myexpenses.model.CurrencyUnit
 import org.totschnig.myexpenses.model.ITransaction
 import org.totschnig.myexpenses.model.Plan
 import org.totschnig.myexpenses.model.Plan.CalendarIntegrationNotAvailableException
+import org.totschnig.myexpenses.model.Sort
 import org.totschnig.myexpenses.model.SplitTransaction
 import org.totschnig.myexpenses.model.Template
 import org.totschnig.myexpenses.model.Transaction
 import org.totschnig.myexpenses.model.Transaction.ExternalStorageNotAvailableException
 import org.totschnig.myexpenses.model.Transaction.UnknownPictureSaveException
 import org.totschnig.myexpenses.model.Transfer
-import org.totschnig.myexpenses.provider.DatabaseConstants
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_COLOR
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_EXCHANGE_RATE
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_LABEL
+import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PARENTID
+import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLANID
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID
+import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_SEALED
+import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TITLE
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TYPE
 import org.totschnig.myexpenses.provider.TransactionProvider
 import org.totschnig.myexpenses.provider.TransactionProvider.QUERY_PARAMETER_ACCOUNTY_TYPE_LIST
@@ -34,8 +37,9 @@ import org.totschnig.myexpenses.util.crashreporting.CrashHandler
 import org.totschnig.myexpenses.viewmodel.data.Account
 import org.totschnig.myexpenses.viewmodel.data.PaymentMethod
 import org.totschnig.myexpenses.viewmodel.data.Tag
-import java.io.Serializable
 import java.util.*
+import kotlin.math.pow
+import org.totschnig.myexpenses.viewmodel.data.Template as DataTemplate
 
 const val ERROR_UNKNOWN = -1L
 const val ERROR_EXTERNAL_STORAGE_NOT_AVAILABLE = -2L
@@ -45,17 +49,37 @@ const val ERROR_WHILE_SAVING_TAGS = -5L
 
 class TransactionEditViewModel(application: Application) : TransactionViewModel(application) {
 
-    val disposables = CompositeDisposable()
+    private val disposables = CompositeDisposable()
+    //TODO move to lazyMap
     private val methods = MutableLiveData<List<PaymentMethod>>()
-    private val accounts = MutableLiveData<List<Account>>()
 
-    fun getMethods(): LiveData<List<PaymentMethod>> {
-        return methods
+    private val accounts by lazy {
+        val liveData = MutableLiveData<List<Account>>()
+        disposables.add(briteContentResolver.createQuery(TransactionProvider.ACCOUNTS_BASE_URI, null, "$KEY_SEALED = 0", null, null, false)
+                .mapToList { buildAccount(it, currencyContext) }
+                .subscribe { liveData.postValue(it) })
+        return@lazy liveData
     }
 
-    fun getAccounts(): LiveData<List<Account>> {
-        return accounts
+    private val templates by lazy {
+        val liveData = MutableLiveData<List<DataTemplate>>()
+        disposables.add(briteContentResolver.createQuery(TransactionProvider.TEMPLATES_URI.buildUpon()
+                .build(), arrayOf(KEY_ROWID, KEY_TITLE),
+                "$KEY_PLANID is null AND $KEY_PARENTID is null AND $KEY_SEALED = 0",
+                null,
+                Sort.preferredOrderByForTemplatesWithPlans(prefHandler, Sort.USAGES),
+                false)
+                .mapToList { DataTemplate.fromCursor(it) }
+                .subscribe { liveData.postValue(it) }
+        )
+        return@lazy liveData
     }
+
+    fun getMethods(): LiveData<List<PaymentMethod>> = methods
+
+    fun getAccounts(): LiveData<List<Account>> = accounts
+
+    fun getTemplates(): LiveData<List<DataTemplate>> = templates
 
     fun plan(planId: Long): LiveData<Plan?> = liveData(context = coroutineContext()) {
         emit(Plan.getInstanceFromDb(planId))
@@ -70,12 +94,6 @@ class TransactionEditViewModel(application: Application) : TransactionViewModel(
                 .mapToList { PaymentMethod.create(it) }
                 .subscribe { methods.postValue(it) }
         )
-    }
-
-    fun loadAccounts(currencyContext: CurrencyContext) {
-        disposables.add(briteContentResolver.createQuery(TransactionProvider.ACCOUNTS_BASE_URI, null, DatabaseConstants.KEY_SEALED + " = 0", null, null, false)
-                .mapToList { buildAccount(it, currencyContext) }
-                .subscribe { accounts.postValue(it) })
     }
 
     private fun buildAccount(cursor: Cursor, currencyContext: CurrencyContext): Account {
@@ -121,8 +139,8 @@ class TransactionEditViewModel(application: Application) : TransactionViewModel(
     }
 
     private fun adjustExchangeRate(raw: Double, currencyUnit: CurrencyUnit): Double {
-        val minorUnitDelta: Int = currencyUnit.fractionDigits() - Utils.getHomeCurrency().fractionDigits()
-        return raw * Math.pow(10.0, minorUnitDelta.toDouble())
+        val minorUnitDelta: Int = currencyUnit.fractionDigits - Utils.getHomeCurrency().fractionDigits
+        return raw * 10.0.pow(minorUnitDelta.toDouble())
     }
 
     fun updateTags(it: MutableList<Tag>) {
@@ -134,19 +152,19 @@ class TransactionEditViewModel(application: Application) : TransactionViewModel(
     }
 
     fun removeTags(tagIds: LongArray) {
-        tags.value?.let { tags.postValue(it.filter { tag -> !tagIds.contains(tag.id)  }.toMutableList())  }
+        tags.value?.let { tags.postValue(it.filter { tag -> !tagIds.contains(tag.id) }.toMutableList()) }
     }
 
-    fun newTemplate(operationType: Int, accountId: Long, parentId : Long?): LiveData<Template?> = liveData(context = coroutineContext()) {
+    fun newTemplate(operationType: Int, accountId: Long, parentId: Long?): LiveData<Template?> = liveData(context = coroutineContext()) {
         emit(Template.getTypedNewInstance(operationType, accountId, true, parentId))
     }
 
-    fun newTransaction(accountId: Long, parentId : Long?): LiveData<Transaction?> = liveData(context = coroutineContext()) {
+    fun newTransaction(accountId: Long, parentId: Long?): LiveData<Transaction?> = liveData(context = coroutineContext()) {
         emit(Transaction.getNewInstance(accountId, parentId))
     }
 
-    fun newTransfer(accountId: Long, transferAcountId: Long?, parentId : Long?): LiveData<Transfer?> = liveData(context = coroutineContext()) {
-        emit(Transfer.getNewInstance(accountId, transferAcountId, parentId))
+    fun newTransfer(accountId: Long, transferAccountId: Long?, parentId: Long?): LiveData<Transfer?> = liveData(context = coroutineContext()) {
+        emit(Transfer.getNewInstance(accountId, transferAccountId, parentId))
     }
 
     fun newSplit(accountId: Long): LiveData<SplitTransaction?> = liveData(context = coroutineContext()) {

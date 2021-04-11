@@ -29,7 +29,7 @@ import org.totschnig.myexpenses.util.Utils
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler
 import java.util.*
 
-class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContext, val resolver: (accountId: Long, transactionUUid: String) -> Long = Transaction::findByAccountAndUuid ) {
+class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContext, val resolver: (accountId: Long, transactionUUid: String) -> Long = Transaction::findByAccountAndUuid) {
 
     private val categoryToId: MutableMap<String, Long> = HashMap()
     private val payeeToId: MutableMap<String, Long> = HashMap()
@@ -73,7 +73,7 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
      * @return the same list with split parts moved as parts to their parents. If there are multiple parents
      * for the same uuid, the splits will appear under each of them
      */
-    fun collectSplits(changeList: MutableList<TransactionChange>): List<TransactionChange>? {
+    fun collectSplits(changeList: MutableList<TransactionChange>): List<TransactionChange> {
         val splitsPerUuid = HashMap<String, MutableList<TransactionChange>>()
         val i = changeList.iterator()
         while (i.hasNext()) {
@@ -193,13 +193,13 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
 
     @VisibleForTesting
     fun collectOperations(change: TransactionChange,
-                                  ops: ArrayList<ContentProviderOperation>,
-                                  parentOffset: Int) {
+                          ops: ArrayList<ContentProviderOperation>,
+                          parentOffset: Int) {
         val uri = Transaction.CALLER_IS_SYNC_ADAPTER_URI
         var skipped = false
         val offset = ops.size
         var tagOpsCount = 0
-        val tagIds = if (change.tags() != null) extractTagIds(change.tags()!!, tagToId) else null
+        val tagIds = change.tags()?.let { extractTagIds(it, tagToId) }
         @Suppress("NON_EXHAUSTIVE_WHEN")
         when (change.type()) {
             TransactionChange.Type.created -> {
@@ -259,6 +259,13 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
                         .withValue(DatabaseConstants.KEY_UUID, change.uuid())
                         .build())
             }
+            TransactionChange.Type.link -> {
+                ops.add(ContentProviderOperation.newUpdate(uri.buildUpon()
+                        .appendPath(TransactionProvider.URI_SEGMENT_LINK_TRANSFER)
+                        .appendPath(change.uuid()).build())
+                        .withValue(DatabaseConstants.KEY_UUID, change.referenceNumber())
+                        .build())
+            }
         }
         if (change.isCreateOrUpdate && !skipped) {
             change.splitParts()?.let { splitParts ->
@@ -302,7 +309,7 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
         }
         if (change.equivalentAmount() != null && change.equivalentCurrency() != null) {
             val homeCurrency = Utils.getHomeCurrency()
-            if (change.equivalentCurrency() == homeCurrency.code()) {
+            if (change.equivalentCurrency() == homeCurrency.code) {
                 values.put(DatabaseConstants.KEY_EQUIVALENT_AMOUNT, change.equivalentAmount())
             }
         }
@@ -339,7 +346,7 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
                 //if the account exists locally and the peer has already been synced
                 //we create a Transfer, the Transfer class will take care in buildSaveOperations
                 //of linking them together
-                findTransferAccount(transferAccount).let { accountId -> resolver(accountId, change.uuid()).takeIf { it != -1L }?.let { Transfer(account.id, money, it) } }
+                findTransferAccount(transferAccount).takeIf { accountId -> resolver(accountId, change.uuid()) != -1L }?.let { Transfer(account.id, money, it) }
             } ?: Transaction(account.id, money).apply {
                 if (change.transferAccount() == null) {
                     change.label()?.let { label ->
@@ -378,7 +385,7 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
         change.equivalentAmount()?.let { equivalentAmount ->
             change.equivalentCurrency()?.let { equivalentCurrency ->
                 with(Utils.getHomeCurrency()) {
-                    if (equivalentCurrency == code()) {
+                    if (equivalentCurrency == code) {
                         t.equivalentAmount = Money(this, equivalentAmount)
                     }
                 }
@@ -392,12 +399,16 @@ class SyncDelegate @JvmOverloads constructor(val currencyContext: CurrencyContex
     }
 
     fun findMetadataChange(input: List<TransactionChange>) =
-            input.findLast { value: TransactionChange -> value.type() == TransactionChange.Type.metadata  }
+            input.findLast { value: TransactionChange -> value.type() == TransactionChange.Type.metadata }
 
     fun removeMetadataChange(input: List<TransactionChange>) =
-            input.filter { value: TransactionChange -> value.type() != TransactionChange.Type.metadata  }
+            input.filter { value: TransactionChange -> value.type() != TransactionChange.Type.metadata }
 
-    fun concat(contentBuilders: List<StringBuilder>) =
-            contentBuilders.reduce { sum, element -> sum.append("\n").append(element) }.toString()
-
+    fun concat(contentBuilders: List<CharSequence>) =
+            contentBuilders.foldIndexed(StringBuilder(), { index, sum, element ->
+                if (index > 0) {
+                    sum.append("\n")
+                }
+                sum.append(element)
+            })
 }

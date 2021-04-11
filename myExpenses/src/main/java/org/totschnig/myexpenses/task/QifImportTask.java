@@ -17,6 +17,7 @@
 package org.totschnig.myexpenses.task;
 
 import android.content.ContentResolver;
+import android.content.Context;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -36,12 +37,13 @@ import org.totschnig.myexpenses.model.Account;
 import org.totschnig.myexpenses.model.ContribFeature;
 import org.totschnig.myexpenses.model.CurrencyUnit;
 import org.totschnig.myexpenses.model.Payee;
-import org.totschnig.myexpenses.model.SplitTransaction;
 import org.totschnig.myexpenses.model.Transaction;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.provider.TransactionProvider;
+import org.totschnig.myexpenses.ui.ContextHelper;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
 import org.totschnig.myexpenses.util.io.FileUtils;
+import org.totschnig.myexpenses.util.licence.LicenceHandler;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -107,10 +109,12 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
 
   @Override
   protected Void doInBackground(Void... params) {
+    final MyApplication application = MyApplication.getInstance();
+    final Context context = ContextHelper.wrap(application, application.getAppComponent().userLocaleProvider().getUserPreferredLocale());
     long t0 = System.currentTimeMillis();
     QifBufferedReader r;
     QifParser parser;
-    ContentResolver contentResolver = MyApplication.getInstance().getContentResolver();
+    ContentResolver contentResolver = application.getContentResolver();
     try {
       InputStream inputStream = contentResolver.openInputStream(fileUri);
       r = new QifBufferedReader(
@@ -119,12 +123,10 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
                   inputStream,
                   encoding)));
     } catch (FileNotFoundException e) {
-      publishProgress(MyApplication.getInstance()
-          .getString(R.string.parse_error_file_not_found, fileUri));
+      publishProgress(context.getString(R.string.parse_error_file_not_found, fileUri));
       return null;
     } catch (Exception e) {
-      publishProgress(MyApplication.getInstance()
-          .getString(R.string.parse_error_other_exception, e.getMessage()));
+      publishProgress(context.getString(R.string.parse_error_other_exception, e.getMessage()));
       return null;
     }
     parser = new QifParser(r, dateFormat, currencyUnit);
@@ -139,10 +141,10 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
               String.valueOf(parser.categories.size()),
               String.valueOf(parser.payees.size())));
       contentResolver.call(TransactionProvider.DUAL_URI, TransactionProvider.METHOD_BULK_START, null, null);
-      doImport(parser);
+      doImport(parser, context);
       contentResolver.call(TransactionProvider.DUAL_URI, TransactionProvider.METHOD_BULK_END, null, null);
       return (null);
-    } catch (IOException| IllegalArgumentException e) {
+    } catch (IOException | IllegalArgumentException e) {
       publishProgress(MyApplication.getInstance()
           .getString(R.string.parse_error_other_exception, e.getMessage()));
       return null;
@@ -182,13 +184,12 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
     return encoding;
   }*/
 
-  private void doImport(QifParser parser) {
+  private void doImport(QifParser parser, Context context) {
     if (withPartiesP) {
       int totalParties = insertPayees(parser.payees);
       publishProgress(totalParties == 0 ?
-          MyApplication.getInstance().getString(R.string.import_parties_none) :
-          MyApplication.getInstance().getString(R.string.import_parties_success,
-              String.valueOf(totalParties)));
+          context.getString(R.string.import_parties_none) :
+          context.getString(R.string.import_parties_success, String.valueOf(totalParties)));
     }
     /*
      * insertProjects(parser.classes); long t2 = System.currentTimeMillis();
@@ -198,25 +199,22 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
     if (withCategoriesP) {
       insertCategories(parser.categories);
       publishProgress(totalCategories == 0 ?
-          MyApplication.getInstance().getString(R.string.import_categories_none) :
-          MyApplication.getInstance().getString(R.string.import_categories_success,
+          context.getString(R.string.import_categories_none) :
+          context.getString(R.string.import_categories_success,
               String.valueOf(totalCategories)));
     }
     if (withTransactionsP) {
       if (accountId == 0) {
-        int importedAccounts = insertAccounts(parser.accounts);
+        int importedAccounts = insertAccounts(parser.accounts, context);
         publishProgress(importedAccounts == 0 ?
-            MyApplication.getInstance().getString(R.string.import_accounts_none) :
-            MyApplication.getInstance().getString(R.string.import_accounts_success,
-                String.valueOf(importedAccounts)));
+            context.getString(R.string.import_accounts_none) :
+            context.getString(R.string.import_accounts_success, String.valueOf(importedAccounts)));
       } else {
         if (parser.accounts.size() > 1) {
           publishProgress(
-              MyApplication.getInstance()
-                  .getString(R.string.qif_parse_failure_found_multiple_accounts)
+              context.getString(R.string.qif_parse_failure_found_multiple_accounts)
                   + " "
-                  + MyApplication.getInstance()
-                  .getString(R.string.qif_parse_failure_found_multiple_accounts_cannot_merge));
+                  + context.getString(R.string.qif_parse_failure_found_multiple_accounts_cannot_merge));
           return;
         }
         if (parser.accounts.isEmpty()) {
@@ -229,7 +227,7 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
               + accountId);
         }
       }
-      insertTransactions(parser.accounts);
+      insertTransactions(parser.accounts, context);
     }
   }
 
@@ -258,19 +256,18 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
     }
   }
 
-  private int insertAccounts(List<QifAccount> accounts) {
+  private int insertAccounts(List<QifAccount> accounts, Context context) {
     int nrOfAccounts = Account.count(null, null);
 
     int importCount = 0;
     for (QifAccount account : accounts) {
-      if (!ContribFeature.ACCOUNTS_UNLIMITED.hasAccess()
+      LicenceHandler licenceHandler = ((MyApplication) taskExecutionFragment.requireContext().getApplicationContext()).getAppComponent().licenceHandler();
+      if (!licenceHandler.hasAccessTo(ContribFeature.ACCOUNTS_UNLIMITED)
           && nrOfAccounts + importCount > 5) {
         publishProgress(
-            MyApplication.getInstance()
-                .getString(R.string.qif_parse_failure_found_multiple_accounts) + " " +
-                ContribFeature.ACCOUNTS_UNLIMITED.buildUsageLimitString(MyApplication.getInstance()) +
-                ContribFeature.ACCOUNTS_UNLIMITED.buildRemoveLimitation(
-                    MyApplication.getInstance(), false));
+            context.getString(R.string.qif_parse_failure_found_multiple_accounts) + " " +
+                ContribFeature.ACCOUNTS_UNLIMITED.buildUsageLimitString(context) +
+                ContribFeature.ACCOUNTS_UNLIMITED.buildRemoveLimitation(context, false));
         break;
       }
       long dbAccountId = TextUtils.isEmpty(account.memo) ? -1 : Account.findAnyOpen(account.memo);
@@ -300,7 +297,7 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
     return importCount;
   }
 
-  private void insertTransactions(List<QifAccount> accounts) {
+  private void insertTransactions(List<QifAccount> accounts, Context context) {
     long t0 = System.currentTimeMillis();
     reduceTransfers(accounts);
     long t1 = System.currentTimeMillis();
@@ -317,8 +314,8 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
       if (a != null) {
         countTransactions = insertTransactions(a, account.transactions);
         publishProgress(countTransactions == 0 ?
-            MyApplication.getInstance().getString(R.string.import_transactions_none, a.getLabel()) :
-            MyApplication.getInstance().getString(R.string.import_transactions_success, countTransactions, a.getLabel()));
+            context.getString(R.string.import_transactions_none, a.getLabel()) :
+            context.getString(R.string.import_transactions_success, countTransactions, a.getLabel()));
       } else {
         publishProgress("Unable to import into QIF account " + account.memo + ". No matching database account found");
       }
@@ -411,7 +408,7 @@ public class QifImportTask extends AsyncTask<Void, String, Void> {
       findToAccount(transaction, t);
 
       if (transaction.splits != null) {
-        ((SplitTransaction) t).save();
+        t.save();
         for (QifTransaction split : transaction.splits) {
           Transaction s = split.toTransaction(a);
           s.setParentId(t.getId());

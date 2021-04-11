@@ -167,7 +167,7 @@ public class PdfPrinter {
       column = "sum(" + Account.CURRENT_BALANCE_EXPR + ")";
       selection = KEY_ROWID + " IN " +
           "(SELECT " + KEY_ROWID + " from " + TABLE_ACCOUNTS + " WHERE " + KEY_CURRENCY + " = ?)";
-      selectionArgs = new String[]{account.getCurrencyUnit().code()};
+      selectionArgs = new String[]{account.getCurrencyUnit().getCode()};
     } else {
       column = Account.CURRENT_BALANCE_EXPR;
       selection = KEY_ROWID + " = ?";
@@ -246,7 +246,7 @@ public class PdfPrinter {
         itemDateFormat = new SimpleDateFormat("EEE");
         break;
       default:
-        itemDateFormat = Utils.localizedYearlessDateFormat(ctx);
+        itemDateFormat = Utils.localizedYearLessDateFormat(ctx);
     }
     PdfPTable table = null;
 
@@ -301,7 +301,7 @@ public class PdfPrinter {
         long sumExpense = groupCursor.getLong(columnIndexGroupSumExpense);
         long sumIncome = groupCursor.getLong(columnIndexGroupSumIncome);
         long sumTransfer = groupCursor.getLong(columnIndexGroupSumTransfer);
-        Long delta = sumIncome + sumExpense + sumTransfer;
+        long delta = sumIncome + sumExpense + sumTransfer;
         long interimBalance = previousBalance + delta;
         String formattedDelta = String.format("%s %s", Long.signum(delta) > -1 ? "+" : "-",
             currencyFormatter.convAmount(Math.abs(delta), account.getCurrencyUnit()));

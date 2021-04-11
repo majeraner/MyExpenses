@@ -22,8 +22,10 @@ import android.os.Bundle;
 import android.util.SparseBooleanArray;
 import android.widget.ListView;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.dialog.CommitSafeDialogFragment;
+import org.totschnig.myexpenses.dialog.BaseDialogFragment;
 import org.totschnig.myexpenses.dialog.MessageDialogFragment;
 import org.totschnig.myexpenses.model.CrStatus;
 import org.totschnig.myexpenses.provider.filter.CrStatusCriteria;
@@ -36,7 +38,7 @@ import androidx.appcompat.app.AlertDialog;
 /**
  * uses {@link MessageDialogFragment.MessageDialogListener} to dispatch result back to activity
  */
-public class SelectCrStatusDialogFragment extends CommitSafeDialogFragment implements OnClickListener {
+public class SelectCrStatusDialogFragment extends BaseDialogFragment implements OnClickListener {
 
   public static SelectCrStatusDialogFragment newInstance() {
     return new SelectCrStatusDialogFragment();
@@ -49,7 +51,7 @@ public class SelectCrStatusDialogFragment extends CommitSafeDialogFragment imple
     for (int i = 0; i < CrStatus.values().length; i++) {
       items[i] = getString(CrStatus.values()[i].toStringRes());
     }
-    return new AlertDialog.Builder(getActivity())
+    return new MaterialAlertDialogBuilder(getActivity())
         .setTitle(R.string.search_status)
         .setMultiChoiceItems(items, null, null)
         .setPositiveButton(android.R.string.ok, this)

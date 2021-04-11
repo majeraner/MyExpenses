@@ -59,12 +59,12 @@ public class TemplateTest extends ModelTest {
     op1.setAmount(new Money(mAccount1.getCurrencyUnit(), amount));
     op1.setComment("test transaction");
     op1.save();
-    assertEquals(mAccount1.getTotalBalance().getAmountMinor().longValue(), start + amount);
+    assertEquals(mAccount1.getTotalBalance().getAmountMinor(), start + amount);
     Template t = new Template(op1, "Template");
     t.save();
-    Transaction op2 = Transaction.getInstanceFromTemplate(t.getId()).first;
+    Transaction op2 = Transaction.getInstanceFromTemplate(t.getId());
     op2.save();
-    assertEquals(mAccount1.getTotalBalance().getAmountMinor().longValue(), start + 2 * amount);
+    assertEquals(mAccount1.getTotalBalance().getAmountMinor(), start + 2 * amount);
     Template restored;
     restored = Template.getInstanceFromDb(t.getId());
     assertNotNull(restored);
@@ -82,7 +82,7 @@ public class TemplateTest extends ModelTest {
 
   public void testTransactionFromTemplate() {
     Template template = buildTemplate();
-    Transaction transaction = Transaction.getInstanceFromTemplate(template).first;
+    Transaction transaction = Transaction.getInstanceFromTemplate(template);
     assertEquals(template.getCatId(), transaction.getCatId());
     assertEquals(template.getAccountId(), transaction.getAccountId());
     assertEquals(template.getPayeeId(), transaction.getPayeeId());

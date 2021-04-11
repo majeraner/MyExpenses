@@ -15,7 +15,6 @@
 
 package org.totschnig.myexpenses.provider;
 
-import android.annotation.TargetApi;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -45,7 +44,6 @@ import org.totschnig.myexpenses.model.Plan;
 import org.totschnig.myexpenses.model.Template;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.sync.json.TransactionChange;
-import org.totschnig.myexpenses.util.DistributionHelper;
 import org.totschnig.myexpenses.util.PictureDirHelper;
 import org.totschnig.myexpenses.util.Utils;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
@@ -72,6 +70,7 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY_OTHER;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY_SELF;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_DATE;
+import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_DEFAULT_ACTION;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_DESCRIPTION;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_END;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_EQUIVALENT_AMOUNT;
@@ -99,6 +98,7 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PAYEE_NAME
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PICTURE_URI;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLANID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLAN_EXECUTION;
+import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLAN_EXECUTION_ADVANCE;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_REFERENCE_NUMBER;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_SEALED;
@@ -156,8 +156,7 @@ import static org.totschnig.myexpenses.util.ColorUtils.MAIN_COLORS;
 import static org.totschnig.myexpenses.util.PermissionHelper.PermissionGroup.CALENDAR;
 
 public class TransactionDatabase extends SQLiteOpenHelper {
-  public static final int DATABASE_VERSION = 107;
-  private static final String DATABASE_NAME = "data";
+  public static final int DATABASE_VERSION = 115;
   private Context mCtx;
 
   /**
@@ -244,6 +243,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
       stringBuilder.append(", ")
           .append(KEY_COLOR).append(", ")
           .append(KEY_CURRENCY).append(", ")
+          .append(KEY_SEALED).append(", ")
           .append(KEY_EXCLUDE_FROM_TOTALS).append(", ")
           .append(TABLE_ACCOUNTS).append(".").append(KEY_TYPE).append(" AS ").append(KEY_ACCOUNT_TYPE).append(", ")
           .append(TABLE_ACCOUNTS).append(".").append(KEY_LABEL).append(" AS ").append(KEY_ACCOUNT_LABEL);
@@ -369,7 +369,9 @@ public class TransactionDatabase extends SQLiteOpenHelper {
           + KEY_UUID + " text, "
           + KEY_LAST_USED + " datetime,"
           + KEY_PARENTID + " integer references " + TABLE_TEMPLATES + "(" + KEY_ROWID + ") ON DELETE CASCADE, "
-          + KEY_STATUS + " integer default 0);";
+          + KEY_STATUS + " integer default 0,"
+          + KEY_PLAN_EXECUTION_ADVANCE + " integer default 0,"
+          + KEY_DEFAULT_ACTION + " text not null check (" + KEY_DEFAULT_ACTION + " in (" + Template.Action.JOIN + ")) default '" + Template.Action.SAVE.name() + "');";
 
   private static final String EVENT_CACHE_CREATE =
       "CREATE TABLE " + TABLE_EVENT_CACHE + " ( " +
@@ -502,7 +504,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
           + "primary key (" + KEY_BUDGETID + "," + KEY_CATID + "));";
 
 
-  private static final String SELECT_SEQUCENE_NUMBER_TEMLATE = "(SELECT " + KEY_SYNC_SEQUENCE_LOCAL + " FROM " + TABLE_ACCOUNTS + " WHERE " + KEY_ROWID + " = %s." + KEY_ACCOUNTID + ")";
+  private static final String SELECT_SEQUENCE_NUMBER_TEMPLATE = "(SELECT " + KEY_SYNC_SEQUENCE_LOCAL + " FROM " + TABLE_ACCOUNTS + " WHERE " + KEY_ROWID + " = %s." + KEY_ACCOUNTID + ")";
   private static final String SELECT_PARENT_UUID_TEMPLATE = "CASE WHEN %1$s." + KEY_PARENTID + " IS NULL THEN NULL ELSE (SELECT " + KEY_UUID + " from " + TABLE_TRANSACTIONS + " where " + KEY_ROWID + " = %1$s." + KEY_PARENTID + ") END";
 
   private static final String INSERT_TRIGGER_ACTION = " BEGIN INSERT INTO " + TABLE_CHANGES + "("
@@ -525,7 +527,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
       + KEY_CR_STATUS + ", "
       + KEY_REFERENCE_NUMBER + ", "
       + KEY_PICTURE_URI + ") VALUES ('" + TransactionChange.Type.created + "', "
-      + String.format(Locale.US, SELECT_SEQUCENE_NUMBER_TEMLATE, "new") + ", "
+      + String.format(Locale.US, SELECT_SEQUENCE_NUMBER_TEMPLATE, "new") + ", "
       + "new." + KEY_UUID + ", "
       + String.format(Locale.US, SELECT_PARENT_UUID_TEMPLATE, "new") + ", "
       + "new." + KEY_COMMENT + ", "
@@ -550,7 +552,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
       + KEY_ACCOUNTID + ","
       + KEY_UUID + ","
       + KEY_PARENT_UUID + ") VALUES ('" + TransactionChange.Type.deleted + "', "
-      + String.format(Locale.US, SELECT_SEQUCENE_NUMBER_TEMLATE, "old") + ", "
+      + String.format(Locale.US, SELECT_SEQUENCE_NUMBER_TEMPLATE, "old") + ", "
       + "old." + KEY_ACCOUNTID + ", "
       + "old." + KEY_UUID + ", "
       + String.format(Locale.US, SELECT_PARENT_UUID_TEMPLATE, "old") + "); END;";
@@ -561,7 +563,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
       + KEY_ACCOUNTID + ","
       + KEY_UUID + ","
       + KEY_PARENT_UUID + ") VALUES ('" + TransactionChange.Type.deleted + "', "
-      + String.format(Locale.US, SELECT_SEQUCENE_NUMBER_TEMLATE, "old") + ", "
+      + String.format(Locale.US, SELECT_SEQUENCE_NUMBER_TEMPLATE, "old") + ", "
       + "old." + KEY_ACCOUNTID + ", "
       + "new." + KEY_UUID + ", "
       + String.format(Locale.US, SELECT_PARENT_UUID_TEMPLATE, "old") + "); END;";
@@ -633,7 +635,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
           + KEY_CR_STATUS + ", "
           + KEY_REFERENCE_NUMBER + ", "
           + KEY_PICTURE_URI + ") VALUES ('" + TransactionChange.Type.updated + "', "
-          + String.format(Locale.US, SELECT_SEQUCENE_NUMBER_TEMLATE, "old") + ", "
+          + String.format(Locale.US, SELECT_SEQUENCE_NUMBER_TEMPLATE, "old") + ", "
           + "new." + KEY_UUID + ", "
           + "new." + KEY_ACCOUNTID + ", "
           + String.format(Locale.US, SELECT_PARENT_UUID_TEMPLATE, "new") + ", "
@@ -705,7 +707,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
           + " BEGIN INSERT INTO %3$s (%4$s, %5$s, %6$s, %7$s) VALUES ('metadata', '_ignored_', new.%6$s, %8$s); END;",
       TABLE_ACCOUNT_EXCHANGE_RATES,
       String.format(Locale.US, SHOULD_WRITE_CHANGE_TEMPLATE, "new"),
-      TABLE_CHANGES, KEY_TYPE, KEY_UUID, KEY_ACCOUNTID, KEY_SYNC_SEQUENCE_LOCAL, String.format(SELECT_SEQUCENE_NUMBER_TEMLATE, "old"));
+      TABLE_CHANGES, KEY_TYPE, KEY_UUID, KEY_ACCOUNTID, KEY_SYNC_SEQUENCE_LOCAL, String.format(SELECT_SEQUENCE_NUMBER_TEMPLATE, "old"));
 
   private static final String SETTINGS_CREATE =
       "CREATE TABLE " + TABLE_SETTINGS + " ("
@@ -725,14 +727,14 @@ public class TransactionDatabase extends SQLiteOpenHelper {
 
   private static final String INSERT_TRANSFER_TAGS_TRIGGER =
       String.format(Locale.ROOT, "CREATE TRIGGER insert_transfer_tags AFTER INSERT ON %1$s "
-          + "WHEN %2$s IS NOT NULL "
-          + "BEGIN INSERT INTO %1$s (%3$s, %4$s) VALUES (%2$s, new.%4$s); END",
+              + "WHEN %2$s IS NOT NULL "
+              + "BEGIN INSERT INTO %1$s (%3$s, %4$s) VALUES (%2$s, new.%4$s); END",
           TABLE_TRANSACTIONS_TAGS, SELECT_TRANSFER_PEER("new"), KEY_TRANSACTIONID, KEY_TAGID);
 
   private static final String DELETE_TRANSFER_TAGS_TRIGGER =
       String.format(Locale.ROOT, "CREATE TRIGGER delete_transfer_tags AFTER DELETE ON %1$s "
-          + "WHEN %2$s IS NOT NULL "
-          + "BEGIN DELETE FROM %1$s WHERE %3$s = %2$s; END",
+              + "WHEN %2$s IS NOT NULL "
+              + "BEGIN DELETE FROM %1$s WHERE %3$s = %2$s; END",
           TABLE_TRANSACTIONS_TAGS, SELECT_TRANSFER_PEER("old"), KEY_TRANSACTIONID);
 
   private static String SELECT_TRANSFER_PEER(String reference) {
@@ -748,16 +750,12 @@ public class TransactionDatabase extends SQLiteOpenHelper {
   public static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
   public static final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
 
-  TransactionDatabase(Context context) {
-    super(context, getDbName(), null, DATABASE_VERSION);
+  TransactionDatabase(Context context, String databaseName) {
+    super(context, databaseName, null, DATABASE_VERSION);
     mCtx = context;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       setWriteAheadLoggingEnabled(false);
     }
-  }
-
-  public static String getDbName() {
-    return MyApplication.isInstrumentationTest() ? MyApplication.getTestId() : DATABASE_NAME;
   }
 
   @Override
@@ -824,6 +822,8 @@ public class TransactionDatabase extends SQLiteOpenHelper {
     //Index
     db.execSQL("CREATE INDEX transactions_cat_id_index on " + TABLE_TRANSACTIONS + "(" + KEY_CATID + ")");
     db.execSQL("CREATE INDEX templates_cat_id_index on " + TABLE_TEMPLATES + "(" + KEY_CATID + ")");
+    db.execSQL("CREATE INDEX transactions_payee_id_index on " + TABLE_TRANSACTIONS + "(" + KEY_PAYEEID + ")");
+    db.execSQL("CREATE INDEX templates_payee_id_index on " + TABLE_TEMPLATES + "(" + KEY_PAYEEID + ")");
 
     // Triggers
     createOrRefreshTransactionTriggers(db);
@@ -869,10 +869,10 @@ public class TransactionDatabase extends SQLiteOpenHelper {
 /*  private void insertTestData(SQLiteDatabase db, int countGroup, int countChild) {
     long date = System.currentTimeMillis() / 1000;
     for (int i = 1; i <= countGroup; i++) {
-      long payeeId = db.insertOrThrow(DatabaseConstants.TABLE_PAYEES, null, new PayeeInfo("Payee " + i).getContentValues());
       AccountInfo testAccount = new AccountInfo("Test account " + i, AccountType.CASH, 0);
       long testAccountId = db.insertOrThrow(DatabaseConstants.TABLE_ACCOUNTS, null, testAccount.getContentValues());
       for (int j = 1; j <= countChild; j++) {
+        long payeeId = db.insertOrThrow(DatabaseConstants.TABLE_PAYEES, null, new PayeeInfo("Payee " + i + "_" + j).getContentValues());
         date -= 60 * 60 * 24;
         TransactionInfo transactionInfo = new TransactionInfo("Transaction " + j, date, 0, testAccountId, payeeId);
         db.insertOrThrow(
@@ -921,7 +921,6 @@ public class TransactionDatabase extends SQLiteOpenHelper {
   @Override
   public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
     try {
-      TransactionProvider.pauseChangeTrigger(db);
       Timber.i("Upgrading database from version %d to %d", oldVersion, newVersion);
       if (oldVersion < 17) {
         db.execSQL("drop table accounts");
@@ -1705,6 +1704,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE _sync_state (status integer)");
         //createOrRefreshChangelogTriggers(db);
       }
+      TransactionProvider.pauseChangeTrigger(db);
 
       if (oldVersion < 64) {
         ContentValues initialValues = new ContentValues();
@@ -1714,33 +1714,31 @@ public class TransactionDatabase extends SQLiteOpenHelper {
       }
 
       if (oldVersion < 65) {
-        if (DistributionHelper.shouldUseAndroidPlatformCalendar()) {
-          //unfortunately we have to drop information about canceled instances
-          db.delete("planinstance_transaction", "transaction_id is null", null);
-          //we update instance_id to negative numbers, in order to prevent Conflict, which would araise
-          //in the rare case where an existing instance_id equals a newly calculated one
-          db.execSQL("update planinstance_transaction set instance_id = - rowid");
-          Cursor c = db.rawQuery("SELECT rowid, (SELECT date from transactions where _id = transaction_id) FROM planinstance_transaction", null);
-          if (c != null) {
-            if (c.moveToFirst()) {
-              ContentValues v = new ContentValues();
-              while (c.getPosition() < c.getCount()) {
-                String rowId = c.getString(0);
-                long date = c.getLong(1);
-                String whereClause = "rowid = ?";
-                String[] whereArgs = {rowId};
-                //This will be correct only for instances where date has not been edited by user, but it is the best we can do
-                v.put("instance_id", CalendarProviderProxy.calculateId(date * 1000));
-                try {
-                  db.update("planinstance_transaction", v, whereClause, whereArgs);
-                } catch (Exception e) {
-                  CrashHandler.report(e);
-                }
-                c.moveToNext();
+        //unfortunately we have to drop information about canceled instances
+        db.delete("planinstance_transaction", "transaction_id is null", null);
+        //we update instance_id to negative numbers, in order to prevent Conflict, which would araise
+        //in the rare case where an existing instance_id equals a newly calculated one
+        db.execSQL("update planinstance_transaction set instance_id = - rowid");
+        Cursor c = db.rawQuery("SELECT rowid, (SELECT date from transactions where _id = transaction_id) FROM planinstance_transaction", null);
+        if (c != null) {
+          if (c.moveToFirst()) {
+            ContentValues v = new ContentValues();
+            while (c.getPosition() < c.getCount()) {
+              String rowId = c.getString(0);
+              long date = c.getLong(1);
+              String whereClause = "rowid = ?";
+              String[] whereArgs = {rowId};
+              //This will be correct only for instances where date has not been edited by user, but it is the best we can do
+              v.put("instance_id", CalendarProviderProxy.calculateId(date * 1000));
+              try {
+                db.update("planinstance_transaction", v, whereClause, whereArgs);
+              } catch (Exception e) {
+                CrashHandler.report(e);
               }
+              c.moveToNext();
             }
-            c.close();
           }
+          c.close();
         }
       }
 
@@ -2121,7 +2119,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
       }
       if (oldVersion < 99) {
         db.execSQL("DROP VIEW IF EXISTS " + VIEW_CHANGES_EXTENDED);
-        //method_id on delete set null
+        //add new change type
         db.execSQL("ALTER TABLE changes RENAME to changes_old");
         db.execSQL("CREATE TABLE changes ( account_id integer not null references accounts(_id) ON DELETE CASCADE, " +
             "type text not null check (type in ('created','updated','deleted','unsplit','metadata')), " +
@@ -2172,15 +2170,7 @@ public class TransactionDatabase extends SQLiteOpenHelper {
         db.execSQL("DROP TRIGGER IF EXISTS sealed_account_transaction_update");
         db.execSQL(TRANSACTIONS_SEALED_UPDATE_TRIGGER_CREATE);
         //repair uuids that got lost by bug
-        db.execSQL("update accounts set sealed = -1 where sealed = 1");
-        try {
-          //this has failed for some users, when it was run in update to version 101, possibly this failure was caused by the faulty sealed_account_transaction_update
-          //and then it should succeed now
-          db.execSQL("update transactions set uuid = (select uuid from transactions peer where peer._id=transactions.transfer_peer) where uuid is null and transfer_peer is not null;");
-        } catch (SQLException e) {
-          Timber.e(e);
-        }
-        db.execSQL("update accounts set sealed = 1 where sealed = -1");
+        repairTransferUuids(db);
       }
       if (oldVersion < 105) {
         db.execSQL("DROP VIEW IF EXISTS " + VIEW_WITH_ACCOUNT);
@@ -2191,16 +2181,86 @@ public class TransactionDatabase extends SQLiteOpenHelper {
         db.execSQL(TRANSACTIONS_UPDATE_TRIGGER_CREATE);
       }
       if (oldVersion < 107) {
-        db.execSQL("update accounts set sealed = -1 where sealed = 1");
-        db.execSQL("UPDATE transactions set date = (select date from transactions parents where _id = transactions.parent_id) where parent_id is not null");
-        db.execSQL("update accounts set sealed = 1 where sealed = -1");
+        repairSplitPartDates(db);
+      }
+      if (oldVersion < 108) {
+        db.execSQL("ALTER TABLE templates add column plan_execution_advance integer default 0");
+      }
+      if (oldVersion < 109) {
+        db.execSQL("CREATE INDEX transactions_payee_id_index on transactions(payee_id)");
+        db.execSQL("CREATE INDEX templates_payee_id_index on templates(payee_id)");
+      }
+      if (oldVersion < 110) {
+        createOrRefreshTemplateViews(db);
+      }
+      if (oldVersion < 111) {
+        repairSplitPartDates(db);
+      }
+      if (oldVersion < 112) {
+        String templateDefaultAction = PrefKey.TEMPLATE_CLICK_DEFAULT.getString("SAVE");
+        if (!(templateDefaultAction.equals("SAVE") || templateDefaultAction.equals("EDIT"))) {
+          templateDefaultAction = "SAVE";
+        }
+        db.execSQL(String.format(Locale.ROOT, "ALTER TABLE templates add column default_action text not null check (default_action in ('SAVE', 'EDIT')) default '%s'", templateDefaultAction));
+      }
+      if (oldVersion < 114) {
+        repairTransferUuids(db);
+      }
+      if (oldVersion < 115) {
+        db.execSQL("DROP VIEW IF EXISTS " + VIEW_CHANGES_EXTENDED);
+        //add new change type
+        db.execSQL("ALTER TABLE changes RENAME to changes_old");
+        db.execSQL("CREATE TABLE changes ( account_id integer not null references accounts(_id) ON DELETE CASCADE, " +
+            "type text not null check (type in ('created','updated','deleted','unsplit','metadata','link')), " +
+            "sync_sequence_local integer, " +
+            "uuid text not null," +
+            "timestamp datetime DEFAULT (strftime('%s','now')), " +
+            "parent_uuid text, " +
+            "comment text, " +
+            "date datetime, " +
+            "value_date datetime, " +
+            "amount integer, " +
+            "original_amount integer, " +
+            "original_currency text, " +
+            "equivalent_amount integer, " +
+            "cat_id integer references categories(_id) ON DELETE SET NULL, " +
+            "payee_id integer references payee(_id) ON DELETE SET NULL, " +
+            "transfer_account integer references accounts(_id) ON DELETE SET NULL, " +
+            "method_id integer references paymentmethods(_id) ON DELETE SET NULL, " +
+            "cr_status text check (cr_status in ('UNRECONCILED','CLEARED','RECONCILED','VOID')), " +
+            "number text," +
+            "picture_id text)");
+        db.execSQL("INSERT INTO changes " +
+            "(account_id, type, sync_sequence_local, uuid, timestamp, parent_uuid, comment, date, value_date, amount, original_amount, original_currency, equivalent_amount, cat_id, payee_id, transfer_account, method_id, cr_status, number, picture_id)" +
+            "SELECT account_id, type, sync_sequence_local, uuid, timestamp, parent_uuid, comment, date, value_date, amount, original_amount, original_currency, equivalent_amount, cat_id, payee_id, transfer_account, method_id, cr_status, number, picture_id FROM changes_old");
+        db.execSQL("DROP TABLE changes_old");
+        db.execSQL("CREATE VIEW " + VIEW_CHANGES_EXTENDED + buildViewDefinitionExtended(TABLE_CHANGES));
+        createOrRefreshTransactionTriggers(db);
+        createOrRefreshAccountTriggers(db);
+        createOrRefreshAccountMetadataTrigger(db);
       }
       TransactionProvider.resumeChangeTrigger(db);
     } catch (SQLException e) {
-      throw Utils.hasApiLevel(Build.VERSION_CODES.JELLY_BEAN) ?
-          new SQLiteUpgradeFailedException(oldVersion, newVersion, e) :
-          e;
+      throw new SQLiteUpgradeFailedException(oldVersion, newVersion, e);
     }
+  }
+
+  public void repairTransferUuids(SQLiteDatabase db) {
+    try {
+      repairWithSealedAccounts(db, () -> db.execSQL("update transactions set uuid = (select uuid from transactions peer where peer._id=transactions.transfer_peer) where uuid is null and transfer_peer is not null;"));
+    } catch (SQLException e) {
+      Timber.e(e);
+    }
+  }
+
+  private void repairWithSealedAccounts(SQLiteDatabase db, Runnable run) {
+    db.execSQL("update accounts set sealed = -1 where sealed = 1");
+    run.run();
+    db.execSQL("update accounts set sealed = 1 where sealed = -1");
+  }
+
+  public void repairSplitPartDates(SQLiteDatabase db) {
+    repairWithSealedAccounts(db, () -> db.execSQL("UPDATE transactions set date = (select date from transactions parents where _id = transactions.parent_id) where parent_id is not null"));
   }
 
   private void createOrRefreshAccountTriggers(SQLiteDatabase db) {
@@ -2297,7 +2357,6 @@ public class TransactionDatabase extends SQLiteOpenHelper {
   }
 
   public static class SQLiteUpgradeFailedException extends SQLiteException {
-    @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
     SQLiteUpgradeFailedException(int oldVersion, int newVersion, SQLException e) {
       super(String.format(Locale.ROOT, "Upgrade failed  %d -> %d", oldVersion, newVersion), e);
     }

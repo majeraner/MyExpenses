@@ -25,14 +25,13 @@ import org.threeten.bp.Instant;
 import org.threeten.bp.LocalDate;
 import org.threeten.bp.LocalTime;
 import org.threeten.bp.ZoneId;
-import org.threeten.bp.ZonedDateTime;
 import org.threeten.bp.format.DateTimeFormatter;
 import org.threeten.bp.format.FormatStyle;
-import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.provider.filter.WhereFilter.Operation;
 
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_DATE;
+import static org.totschnig.myexpenses.util.DateUtilsKt.localDateTime2Epoch;
 
 public class DateCriteria extends Criteria {
   static final String COLUMN = KEY_DATE;
@@ -137,7 +136,7 @@ public class DateCriteria extends Criteria {
   }
 
   private String local2ZonedAtTime(String localDate, LocalTime localTime) {
-    return String.valueOf(ZonedDateTime.of(LocalDate.parse(localDate).atTime(localTime), ZoneId.systemDefault()).toEpochSecond());
+    return String.valueOf(localDateTime2Epoch(LocalDate.parse(localDate).atTime(localTime)));
   }
 
   @Override
@@ -147,14 +146,14 @@ public class DateCriteria extends Criteria {
     String date1 = df.format(LocalDate.parse(values[0]));
     switch (operation) {
       case GTE:
-        result = MyApplication.getInstance().getString(R.string.after, date1);
+        result = context.getString(R.string.after, date1);
         break;
       case LTE:
-        result = MyApplication.getInstance().getString(R.string.before, date1);
+        result = context.getString(R.string.before, date1);
         break;
       case BTW:
         String date2 = df.format(LocalDate.parse(values[1]));
-        result += MyApplication.getInstance().getString(R.string.between_and, date1, date2);
+        result += context.getString(R.string.between_and, date1, date2);
     }
     return result;
   }

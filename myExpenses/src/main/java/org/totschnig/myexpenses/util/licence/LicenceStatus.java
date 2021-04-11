@@ -5,8 +5,10 @@ import org.totschnig.myexpenses.model.ContribFeature;
 
 import java.util.Locale;
 
+import androidx.annotation.Nullable;
+
 public enum LicenceStatus {
-  CONTRIB(R.string.contrib_key), EXTENDED(R.string.extended_key), PROFESSIONAL(R.string.professional_key) {
+  CONTRIB(R.string.contrib_key), EXTENDED(R.string.extended_key), EXTENDED_FALLBACK(R.string.extended_key), PROFESSIONAL(R.string.professional_key) {
     @Override
     public boolean isUpgradeable() {
       return false;
@@ -23,7 +25,7 @@ public enum LicenceStatus {
     return resId;
   }
 
-  public boolean greaterOrEqual(LicenceStatus other) {
+  public boolean greaterOrEqual(@Nullable LicenceStatus other) {
     return other == null || compareTo(other) >= 0;
   }
 
@@ -38,14 +40,11 @@ public enum LicenceStatus {
 
   /**
    * for historical reasons, skus for Contrib used "premium"
-   * @return
    */
   public String toSkuType() {
-    switch (this) {
-      case CONTRIB:
-        return "premium";
-      default:
-        return name().toLowerCase(Locale.ROOT);
+    if (this == LicenceStatus.CONTRIB) {
+      return "premium";
     }
+    return name().toLowerCase(Locale.ROOT);
   }
 }

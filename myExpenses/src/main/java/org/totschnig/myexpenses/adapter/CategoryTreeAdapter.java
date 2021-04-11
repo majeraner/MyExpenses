@@ -1,21 +1,22 @@
 package org.totschnig.myexpenses.adapter;
 
+import android.content.Context;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
+import org.totschnig.myexpenses.databinding.CategoryRowBinding;
 import org.totschnig.myexpenses.model.CurrencyUnit;
 import org.totschnig.myexpenses.util.CurrencyFormatter;
 import org.totschnig.myexpenses.viewmodel.data.Category;
 
-import androidx.annotation.NonNull;
-import butterknife.BindView;
-
 import static org.totschnig.myexpenses.util.ColorUtils.createBackgroundColorDrawable;
 
-public class CategoryTreeAdapter extends CategoryTreeBaseAdapter {
-  public CategoryTreeAdapter(ProtectedFragmentActivity ctx, CurrencyFormatter currencyFormatter,
+public class CategoryTreeAdapter extends CategoryTreeBaseAdapter<CategoryRowBinding> {
+  public CategoryTreeAdapter(Context ctx, CurrencyFormatter currencyFormatter,
                              CurrencyUnit currency, boolean withMainColors, boolean withSubColors,
                              boolean withNullCategory) {
     super(ctx, currencyFormatter, currency, withMainColors, withSubColors, withNullCategory);
@@ -25,34 +26,39 @@ public class CategoryTreeAdapter extends CategoryTreeBaseAdapter {
   protected View getView(Category item, Category parentItem, View convertView, ViewGroup parent, int color, String icon) {
     final View view = super.getView(item, parentItem, convertView, parent, color, icon);
     ViewHolder holder = (ViewHolder) view.getTag();
-    if (item.sum != null) {
-      holder.amount.setTextColor(item.sum < 0 ? colorExpense : colorIncome);
+    if (item.getSum() != null) {
+      amount(holder).setTextColor(context.getResources().getColor(item.getSum() >= 0 ?  R.color.colorIncome : R.color.colorExpense));
     }
-    holder.color.setVisibility(color != 0 ? View.VISIBLE :
+    holder.binding.color.setVisibility(color != 0 ? View.VISIBLE :
         (withMainColors ? View.INVISIBLE : View.GONE));
     if (color != 0) {
-      holder.color.setBackgroundDrawable(createBackgroundColorDrawable(color));
+      holder.binding.color.setBackground(createBackgroundColorDrawable(color));
     }
     return view;
   }
 
   @Override
-  protected int getLayoutResourceId() {
-    return R.layout.category_row;
+  TextView label(ViewHolder viewHolder) {
+    return viewHolder.binding.label;
   }
 
-
-  @NonNull
-  protected CategoryTreeBaseAdapter.ViewHolder getHolder(View convertView) {
-    return new ViewHolder(convertView);
+  @Override
+  TextView amount(ViewHolder viewHolder) {
+    return viewHolder.binding.amount;
   }
 
-  static class ViewHolder extends CategoryTreeBaseAdapter.ViewHolder {
-    @BindView(R.id.color1)
-    View color;
+  @Override
+  ImageView groupIndicator(ViewHolder viewHolder) {
+    return viewHolder.binding.explistIndicator;
+  }
 
-    ViewHolder(View view) {
-      super(view);
-    }
+  @Override
+  ImageView icon(ViewHolder viewHolder) {
+    return viewHolder.binding.categoryIcon;
+  }
+
+  @Override
+  protected CategoryRowBinding getViewBinding(LayoutInflater inflater, ViewGroup parent) {
+    return CategoryRowBinding.inflate(inflater, parent, false);
   }
 }

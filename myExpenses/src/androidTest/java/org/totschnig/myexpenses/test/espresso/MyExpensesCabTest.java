@@ -7,7 +7,6 @@ import android.os.RemoteException;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.activity.MyExpenses;
@@ -22,16 +21,18 @@ import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.testutils.BaseUiTest;
 
 import java.util.Currency;
+import java.util.Objects;
+import java.util.concurrent.TimeoutException;
 
+import androidx.annotation.NonNull;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.espresso.matcher.CursorMatchers;
 import androidx.test.filters.FlakyTest;
-import androidx.test.rule.ActivityTestRule;
 
 import static androidx.test.espresso.Espresso.closeSoftKeyboard;
 import static androidx.test.espresso.Espresso.onData;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
-import static androidx.test.espresso.action.ViewActions.longClick;
 import static androidx.test.espresso.action.ViewActions.typeText;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.hasDescendant;
@@ -49,26 +50,24 @@ import static org.totschnig.myexpenses.testutils.Matchers.withAdaptedData;
 
 public final class MyExpensesCabTest extends BaseUiTest {
 
-  @Rule
-  public ActivityTestRule<MyExpenses> mActivityRule =
-      new ActivityTestRule<>(MyExpenses.class, true, false);
+  private ActivityScenario<MyExpenses> activityScenario = null;
   private Account account;
 
   @Before
   public void fixture() {
-    account = new Account("Test account 1", CurrencyUnit.create(Currency.getInstance("EUR")), 0, "",
+    account = new Account("Test account 1", new CurrencyUnit(Currency.getInstance("EUR")), 0, "",
         AccountType.CASH, Account.DEFAULT_COLOR);
     account.save();
     Transaction op0 = Transaction.getNewInstance(account.getId());
-    op0.setAmount(new Money(CurrencyUnit.create(Currency.getInstance("USD")), -1200L));
+    op0.setAmount(new Money(new CurrencyUnit(Currency.getInstance("USD")), -1200L));
     op0.save();
     int times = 5;
     for (int i = 0; i < times; i++) {
       op0.saveAsNew();
     }
-    Intent i = new Intent();
+    Intent i = new Intent(getTargetContext(), MyExpenses.class);
     i.putExtra(KEY_ROWID, account.getId());
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
   }
 
   @After
@@ -78,107 +77,83 @@ public final class MyExpensesCabTest extends BaseUiTest {
 
   @Test
   @FlakyTest
-  public void cloneCommandIncreasesListSize() {
+  public void cloneCommandIncreasesListSize() throws TimeoutException {
     int origListSize = waitForAdapter().getCount();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1)
-        .perform(longClick());
-    clickMenuItem(R.id.CLONE_TRANSACTION_COMMAND, R.string.menu_clone_transaction, true);
-    onView(withId(R.id.SAVE_COMMAND)).perform(click());
+    openCab();
+    clickMenuItem(R.id.CLONE_TRANSACTION_COMMAND, true);
+    closeKeyboardAndSave();
     assertThat(waitForAdapter().getCount()).isEqualTo(origListSize + 1);
   }
 
   @Test
   @FlakyTest
-  public void editCommandKeepsListSize() {
+  public void editCommandKeepsListSize() throws TimeoutException {
     int origListSize = waitForAdapter().getCount();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1) // position 0 is header
-        .perform(longClick());
-    clickMenuItem(R.id.EDIT_COMMAND, R.string.menu_edit, true);
-    onView(withId(R.id.SAVE_COMMAND)).perform(click());
+    openCab();
+    clickMenuItem(R.id.EDIT_COMMAND, true);
+    closeKeyboardAndSave();
     assertThat(waitForAdapter().getCount()).isEqualTo(origListSize);
     }
 
   @Test
-  public void createTemplateCommandCreatesTemplate() {
+  public void createTemplateCommandCreatesTemplate() throws TimeoutException {
     waitForAdapter();
     String templateTitle = "Espresso Template Test";
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1)
-        .perform(longClick());
-    clickMenuItem(R.id.CREATE_TEMPLATE_COMMAND, R.string.menu_create_template_from_transaction, true);
-    onView(withText(containsString(mActivityRule.getActivity().getString(R.string.dialog_title_template_title))))
+    openCab();
+    clickMenuItem(R.id.CREATE_TEMPLATE_COMMAND, true);
+    onView(withText(containsString(getString(R.string.menu_create_template))))
         .check(matches(isDisplayed()));
     onView(withId(R.id.editText))
         .perform(typeText(templateTitle));
     closeSoftKeyboard();
     onView(withText(R.string.dialog_button_add)).perform(click());
-    onView(withId(R.id.SAVE_COMMAND)).perform(click());
+    onView(withId(R.id.CREATE_COMMAND)).perform(click());
 
     //((EditText) mSolo.getView(EditText.class, 0)).onEditorAction(EditorInfo.IME_ACTION_DONE);
-    clickMenuItem(R.id.MANAGE_PLANS_COMMAND, R.string.menu_manage_plans);
+    clickMenuItem(R.id.MANAGE_TEMPLATES_COMMAND);
     onView(withText(is(templateTitle))).check(matches(isDisplayed()));
   }
 
   @Test
-  public void deleteCommandDecreasesListSize() {
+  public void deleteCommandDecreasesListSize() throws TimeoutException {
     int origListSize = waitForAdapter().getCount();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1)
-        .perform(longClick());
-    clickMenuItem(R.id.DELETE_COMMAND, R.string.menu_delete, true);
+    openCab();
+    clickMenuItem(R.id.DELETE_COMMAND, true);
     onView(withText(R.string.menu_delete)).perform(click());
     assertThat(waitForAdapter().getCount()).isEqualTo(origListSize - 1);
   }
 
   @Test
-  public void deleteCommandWithVoidOption() {
+  public void deleteCommandWithVoidOption() throws TimeoutException {
     int origListSize = waitForAdapter().getCount();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1) // position 0 is header
-        .perform(longClick());
-    clickMenuItem(R.id.DELETE_COMMAND, R.string.menu_delete, true);
+    openCab();
+    clickMenuItem(R.id.DELETE_COMMAND, true);
     onView(withId(R.id.checkBox)).perform(click());
     onView(withText(R.string.menu_delete)).perform(click());
     onData(is(instanceOf(Cursor.class))).inAdapterView(getWrappedList()).atPosition(1)
         .check(matches(hasDescendant(both(withId(R.id.voidMarker)).and(isDisplayed()))));
     assertThat(waitForAdapter().getCount()).isEqualTo(origListSize);
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1) // position 0 is header
-        .perform(longClick());
-    clickMenuItem(R.id.UNDELETE_COMMAND, R.string.menu_undelete_transaction, true);
+    openCab();
+    clickMenuItem(R.id.UNDELETE_COMMAND, true);
     onView(getWrappedList())
         .check(matches(not(withAdaptedData(CursorMatchers.withRowString(DatabaseConstants.KEY_CR_STATUS, "VOID")))));
     assertThat(waitForAdapter().getCount()).isEqualTo(origListSize);
   }
 
   @Test
-  public void deleteCommandCancelKeepsListSize() {
+  public void deleteCommandCancelKeepsListSize() throws TimeoutException {
     int origListSize = waitForAdapter().getCount();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1)
-        .perform(longClick());
-    clickMenuItem(R.id.DELETE_COMMAND, R.string.menu_delete, true);
+    openCab();
+    clickMenuItem(R.id.DELETE_COMMAND, true);
     onView(withText(android.R.string.cancel)).perform(click());
     assertThat(waitForAdapter().getCount()).isEqualTo(origListSize);
   }
 
   @Test
-  public void splitCommandCreatesSplitTransaction() {
+  public void splitCommandCreatesSplitTransaction() throws TimeoutException {
     waitForAdapter();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1)
-        .perform(longClick());
-    clickMenuItem(R.id.SPLIT_TRANSACTION_COMMAND, R.string.menu_split_transaction, true);
+    openCab();
+    clickMenuItem(R.id.SPLIT_TRANSACTION_COMMAND, true);
     handleContribDialog(ContribFeature.SPLIT_TRANSACTION);
     onView(withText(R.string.menu_split_transaction)).perform(click());
     onView(withText(R.string.split_transaction)).check(matches(isDisplayed()));
@@ -191,18 +166,16 @@ public final class MyExpensesCabTest extends BaseUiTest {
   }
 
   @Test
-  public void cabIsRestoredAfterOrientationChange() {
+  public void cabIsRestoredAfterOrientationChange() throws TimeoutException {
     waitForAdapter();
-    onData(is(instanceOf(Cursor.class)))
-        .inAdapterView(getWrappedList())
-        .atPosition(1)
-        .perform(longClick());
+    openCab();
     rotate();
     onView(withId(R.id.action_mode_bar)).check(matches(isDisplayed()));
   }
 
+  @NonNull
   @Override
-  protected ActivityTestRule<? extends ProtectedFragmentActivity> getTestRule() {
-    return mActivityRule;
+  protected ActivityScenario<? extends ProtectedFragmentActivity> getTestScenario() {
+    return Objects.requireNonNull(activityScenario);
   }
 }

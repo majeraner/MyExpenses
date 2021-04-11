@@ -45,10 +45,6 @@ public class QifUtils {
   /**
    * First tries to parse input as a date in the specified format. If this fails, try to split
    * input on white space in two chunks, and tries to parse first chunk as date, second as time
-   *
-   * @param sDateTime
-   * @param format
-   * @return
    */
   public static Date parseDate(String sDateTime, QifDateFormat format) {
     try {
@@ -139,7 +135,7 @@ public class QifUtils {
    * @return
    */
   public static BigDecimal parseMoney(@NonNull String money, CurrencyUnit currency) {
-    return parseMoney(money, 18 - currency.fractionDigits());
+    return parseMoney(money, 18 - currency.getFractionDigits());
   }
 
   /**

@@ -1,12 +1,10 @@
 package org.totschnig.myexpenses.dialog;
 
 import android.accounts.AccountManager;
-import android.app.Activity;
 import android.app.Dialog;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -16,10 +14,8 @@ import android.widget.TextView;
 
 import com.annimon.stream.Exceptional;
 
-import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.activity.SyncBackendSetupActivity;
-import org.totschnig.myexpenses.preference.PrefHandler;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.sync.GenericAccountService;
 import org.totschnig.myexpenses.sync.WebDavBackendProvider;
@@ -39,10 +35,7 @@ import java.io.FileNotFoundException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 
-import javax.inject.Inject;
-
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import okhttp3.HttpUrl;
 
@@ -50,7 +43,7 @@ import static org.totschnig.myexpenses.activity.ProtectedFragmentActivity.ASYNC_
 import static org.totschnig.myexpenses.activity.ProtectedFragmentActivity.PROGRESS_TAG;
 import static org.totschnig.myexpenses.sync.WebDavBackendProvider.KEY_ALLOW_UNVERIFIED;
 
-public class SetupWebdavDialogFragment extends CommitSafeDialogFragment {
+public class SetupWebdavDialogFragment extends BaseDialogFragment {
 
   private EditText mEdtUrl;
   private EditText mEdtUserName;
@@ -60,25 +53,13 @@ public class SetupWebdavDialogFragment extends CommitSafeDialogFragment {
   private CheckBox mChkTrustCertificate;
   private X509Certificate mTrustCertificate;
 
-  @Inject
-  PrefHandler prefHandler;
-
-  @Override
-  public void onCreate(@Nullable Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    MyApplication.getInstance().getAppComponent().inject(this);
-  }
-
   @NonNull
   @Override
   public Dialog onCreateDialog(Bundle savedInstanceState) {
-    Activity ctx  = getActivity();
-    LayoutInflater li = LayoutInflater.from(ctx);
-    //noinspection InflateParams
-    View view = li.inflate(R.layout.setup_webdav, null);
-    ((TextView) view.findViewById(R.id.description_webdav_url)).setText(
+    AlertDialog.Builder builder = initBuilderWithView(R.layout.setup_webdav);
+    ((TextView) dialogView.findViewById(R.id.description_webdav_url)).setText(
         Utils.getTextWithAppName(getContext(), R.string.description_webdav_url));
-    mEdtUrl = view.findViewById(R.id.edt_url);
+    mEdtUrl = dialogView.findViewById(R.id.edt_url);
     mEdtUrl.addTextChangedListener(new TextWatcher() {
       @Override
       public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -94,18 +75,16 @@ public class SetupWebdavDialogFragment extends CommitSafeDialogFragment {
         mChkTrustCertificate.setChecked(false);
       }
     });
-    mEdtUserName = view.findViewById(R.id.edt_user_name);
-    mEdtPassword = view.findViewById(R.id.edt_password);
-    certificateContainer = view.findViewById(R.id.certificate_container);
-    mTxtTrustCertificate = view.findViewById(R.id.txt_trust_certificate);
-    mChkTrustCertificate = view.findViewById(R.id.chk_trust_certificate);
+    mEdtUserName = dialogView.findViewById(R.id.edt_user_name);
+    mEdtPassword = dialogView.findViewById(R.id.edt_password);
+    certificateContainer = dialogView.findViewById(R.id.certificate_container);
+    mTxtTrustCertificate = dialogView.findViewById(R.id.txt_trust_certificate);
+    mChkTrustCertificate = dialogView.findViewById(R.id.chk_trust_certificate);
 
     certificateContainer.setVisibility(View.GONE);
     mTxtTrustCertificate.setVisibility(View.GONE);
     mChkTrustCertificate.setVisibility(View.GONE);
-    AlertDialog alertDialog = new AlertDialog.Builder(ctx)
-        .setTitle("WebDAV")
-        .setView(view)
+    AlertDialog alertDialog = builder.setTitle("WebDAV")
         .setNegativeButton(android.R.string.cancel, null)
         .setPositiveButton(android.R.string.ok, null)
         .create();
@@ -131,7 +110,7 @@ public class SetupWebdavDialogFragment extends CommitSafeDialogFragment {
       args.putString(TestLoginTask.KEY_PASSWORD, mEdtPassword.getText().toString().trim());
       args.putSerializable(TestLoginTask.KEY_CERTIFICATE, mChkTrustCertificate.isChecked() ? mTrustCertificate : null);
       args.putBoolean(KEY_ALLOW_UNVERIFIED, prefHandler.getBoolean(PrefKey.WEBDAV_ALLOW_UNVERIFIED_HOST, false));
-      getFragmentManager()
+      getParentFragmentManager()
           .beginTransaction()
           .add(TaskExecutionFragment.newInstanceWithBundle(args, TaskExecutionFragment.TASK_WEBDAV_TEST_LOGIN), ASYNC_TAG)
           .add(ProgressDialogFragment.newInstance("WebDAV", null, 0, false),

@@ -27,7 +27,6 @@ public class Help extends ProtectedFragmentActivity {
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    setTheme(getThemeIdTranslucent());
     super.onCreate(savedInstanceState);
     String context = getIntent().getStringExtra(KEY_CONTEXT);
     if (context == null) {
@@ -40,5 +39,10 @@ public class Help extends ProtectedFragmentActivity {
     }
     String variant = getIntent().getStringExtra(HelpDialogFragment.KEY_VARIANT);
     HelpDialogFragment.newInstance(context, variant).show(getSupportFragmentManager(), "HELP");
+  }
+
+  @Override
+  protected int getSnackbarContainerId() {
+    return android.R.id.content;
   }
 }

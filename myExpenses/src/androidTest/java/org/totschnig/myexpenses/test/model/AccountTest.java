@@ -100,8 +100,8 @@ public class AccountTest extends ModelTest {
     Account account, restored;
     Long openingBalance = (long) 100;
     account = new Account("TestAccount", openingBalance, "Testing with Junit");
-    account.setCurrency(CurrencyUnit.create(java.util.Currency.getInstance("EUR")));
-    assertEquals("EUR", account.getCurrencyUnit().code());
+    account.setCurrency(new CurrencyUnit(java.util.Currency.getInstance("EUR")));
+    assertEquals("EUR", account.getCurrencyUnit().getCode());
     account.save();
     assertTrue(account.getId() > 0);
     restored = Account.getInstanceFromDb(account.getId());
@@ -112,7 +112,7 @@ public class AccountTest extends ModelTest {
     op1.setAmount(new Money(account.getCurrencyUnit(), trAmount));
     op1.setComment("test transaction");
     op1.save();
-    assertEquals(account.getTotalBalance().getAmountMinor().longValue(), openingBalance + trAmount);
+    assertEquals(account.getTotalBalance().getAmountMinor(), openingBalance + trAmount);
     Account.delete(account.getId());
     assertNull("Account deleted, but can still be retrieved", Account.getInstanceFromDb(account.getId()));
     assertNull("Account delete should delete transaction, but operation can still be retrieved", Transaction.getInstanceFromDb(op1.getId()));
@@ -194,7 +194,7 @@ public class AccountTest extends ModelTest {
 
   public void testGetAggregateAccountFromDb() {
     insertData();
-    String currency = Utils.getHomeCurrency().code();
+    String currency = Utils.getHomeCurrency().getCode();
     Cursor c = getMockContentResolver().query(
         TransactionProvider.CURRENCIES_URI,
         new String[]{KEY_ROWID},
@@ -207,8 +207,8 @@ public class AccountTest extends ModelTest {
     c.close();
     AggregateAccount aa = (AggregateAccount) Account.getInstanceFromDb(id);
     assert aa != null;
-    assertEquals(currency, aa.getCurrencyUnit().code());
-    assertEquals(openingBalance * 2, aa.openingBalance.getAmountMinor().longValue());
+    assertEquals(currency, aa.getCurrencyUnit().getCode());
+    assertEquals(openingBalance * 2, aa.openingBalance.getAmountMinor());
   }
 
   public void testBalanceWithoutReset() {

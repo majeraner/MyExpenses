@@ -52,7 +52,7 @@
     <string name="contrib_feature_split_template_label" tools:ignore="UnusedResources">Unlimited number of split templates</string>
     <string name="contrib_feature_pro_support_label" tools:ignore="UnusedResources"><b>Email support</b> with guaranteed response within 2 business days</string>
     <string name="contrib_feature_roadmap_voting_label" tools:ignore="UnusedResources">Voting right on <b>development roadmap</b></string>
-    <string name="contrib_feature_history_label" tools:ignore="UnusedResources">History chart (Cash flow)</string>
+    <string name="contrib_feature_history_label" tools:ignore="UnusedResources">History chart</string>
     <string name="licence_status_free">Free</string>
     <string name="contrib_key">Contrib Key</string>
     <string name="extended_key">Extended Key</string>
@@ -97,7 +97,6 @@
     <string name="dialog_password_new_password">New password</string>
     <string name="dialog_password_new_password_confirmation">New password (confirmation)</string>
     <string name="dialog_remind_later">Later</string>
-    <string name="dialog_remind_no">No thanks</string>
     <string name="dialog_remind_rate_how_many_stars">How many stars would you give to {app_name}?</string>
     <string name="dialog_remind_rate_1">Please take a moment to rate and review {app_name}.</string>
     <string name="dialog_remind_rate_2">Your comments allow us to continually add improvements and enhancements.</string>
@@ -110,7 +109,6 @@
     <!-- %1$s is replace with account label -->
     <string name="dialog_title_balance_account">Balance %1$s</string>
     <string name="dialog_title_contrib_feature">Premium feature</string>
-    <string name="dialog_title_template_title">Set the title</string>
     <plurals name="dialog_title_warning_delete_account">
         <item quantity="one">Delete account?</item>
         <item quantity="other">Delete %1$d accounts?</item>
@@ -224,6 +222,7 @@
     <string name="no_exportable_expenses">There are no transactions that have not yet been exported.</string>
     <string name="no_filemanager_installed">No filemanager installed</string>
     <string name="no_calendar_app_installed">No app found for editing calendar event.</string>
+    <string name="image_capture_not_installed">No app found for taking picture.</string>
     <string name="no_mapped_transactions">No transactions have been mapped to categories during this period.</string>
     <string name="no_methods">No payment methods.</string>
     <string name="no_parties">No parties.</string>
@@ -277,7 +276,6 @@
     <string name="pm_type_debit">Debit</string>
     <string name="pm_type_neutral">Neutral</string>
     <string name="pref_app_dir_title">Folder for backups and exports</string>
-    <string name="pref_auto_fill_title">Autofill transactions</string>
     <string name="pref_auto_fill_summary">Fill in data from last transaction for same payee/payer</string>
     <string name="pref_backup_summary">Create a backup of database and preferences.</string>
     <string name="pref_sort_order_usages">Count of usages</string>
@@ -331,7 +329,6 @@
     <string name="pref_protection_enable_data_entry_from_widget_summary_on">Allowed without password.</string>
     <string name="pref_protection_enable_data_entry_from_widget_summary_off">Password is required.</string>
     <string name="pref_qif_export_file_encoding_title">Character encoding</string>
-    <string name="pref_request_licence_title">Request a key</string>
     <!-- Alternative is used as an adjective designing an alternative method for restoring backups -->
     <string name="pref_restore_alternative">Alternative</string>
     <string name="pref_restore_alternative_summary">Use this alternative method if there is no file manager installed on the device.</string>
@@ -345,7 +342,6 @@
     <string name="pref_shortcut_added">Shortcut has been added to Home Screen</string>
     <string name="pref_shortcut_not_added">No Home Screen available that accepts shortcuts.</string>
     <string name="pref_shortcut_summary">Add the shortcut to Home Screen.</string>
-    <string name="pref_template_click_default_summary">Upon short tap on entry in template list</string>
     <string name="pref_ui_fontsize_title">Font size</string>
     <string name="pref_ui_home_screen_shortcuts">Home Screen Shortcuts</string>
     <string name="pref_ui_language_default">System default</string>
@@ -406,6 +402,7 @@
     <string name="transfer">Transfer</string>
     <string name="transfer_from_account">From</string>
     <string name="transfer_to_account">To</string>
+    <!-- Type refers to the type of an account, eg. Cash account, bank account -->
     <string name="type">Type</string>
     <string name="unsplit_amount">Unsplit amount</string>
     <string name="unsplit_amount_greater_than_zero">There is still some amount left unsplit.</string>
@@ -440,7 +437,7 @@
     <string name="warning_instantiate_template_from_widget_password_protected">Quick instantiation of templates from this widget only works if you allow data entry from widgets without password in the app settings.</string>
     <string name="warning_password_contrib">Setting a security question allows you to unlock the app, in case you forget your password.</string>
     <string name="warning_reset_account">If you proceed, all transactions of this account are deleted from the database and cannot be restored.</string>
-    <!-- the placeholder %1$s will hold a currency code in paranthesis, if the user calls the reset command from an aggregate account list -->
+    <!-- the placeholder %1$s will hold a currency code in parenthesis, if the user calls the reset command from an aggregate account list -->
     <string name="warning_reset_account_all">If you proceed, for all accounts%1$s, transactions will be deleted from the database and cannot be restored.</string>
     <string name="warning_reset_account_matched">If you proceed, transactions matched by the current filter will be deleted from the database and cannot be restored.</string>
     <string name="warning_restore">Database and preferences will be restored from file \"%1$s\". The current data will be deleted.</string>
@@ -485,14 +482,14 @@
     <string name="comparison_operator_equal">equal to</string>
     <string name="comparison_operator_greater_than">greater than</string>
     <string name="comparison_operator_lesser_than">lesser than</string>
+    <!-- Used in dialogue where user can filter transactions based on their date. This is one of three possible values populating a dropdown. Allows to select transactions between two specified dates. -->
     <string name="comparison_operator_between">between</string>
+    <!-- Used in dialogue where user can filter transactions based on their date. This is one of three possible values populating a dropdown. Allows to select transactions before a specified date.  -->
     <string name="comparison_operator_date_before">before</string>
+    <!-- Used in dialogue where user can filter transactions based on their date. This is one of three possible values populating a dropdown. Allows to select transactions after a specified date. -->
     <string name="comparison_operator_date_after">after</string>
     <string name="premium_failed_or_canceled" tools:ignore="UnusedResources">Purchasing failed or cancelled.</string>
     <string name="hint_auto_fill">Should data be filled in automatically from last transaction for same payee/payer? You can always change this behaviour from the settings.</string>
-    <string name="yes">Yes</string>
-    <string name="no">No</string>
-    <string name="hint_template_click">A short tap on an entry in this list will instantiate the template and either save it immediately or enter its editing form where you can modify it before saving. You can always access both actions through a long tap, and change the default in the settings.</string>
     <string name="change_fraction_digits_result" tools:ignore="PluralsCandidate">%1$d accounts with currency %2$s have been updated.</string>
     <string name="learn_more">Learn more</string>
     <string name="import_source_file">File</string>
@@ -507,10 +504,12 @@
     <string name="menu_change_picture">Attach different picture</string>
     <string name="menu_distribution_show_pie_char">Show pie chart</string>
     <string name="menu_distribution_aggreate">Aggregate expenses and income</string>
+    <!-- Stale refers to pictures left over from deleted transactions  -->
     <string name="pref_manage_stale_images_title">Stale images</string>
     <string name="pref_manage_stale_images_summary">Manage pictures left over from deleted transactions</string>
     <string name="image_deleted">Picture has been deleted</string>
     <string name="transaction_deleted">Transaction has been deleted</string>
+    <string name="account_deleted">Account has been deleted</string>
     <string name="dialog_export_applied_to_filter">Only transactions matched by the current filter will be considered.</string>
     <string name="export_handle_deleted_create_helper">Create helper transaction</string>
     <string name="export_handle_deleted_update_balance">Update opening balance</string>
@@ -524,8 +523,6 @@
     <string name="pref_csv_import_delimiter">Delimiter</string>
     <string name="csv_import_preview">Preview</string>
     <string name="menu_parse">Parse</string>
-    <!-- Label for column where user can check rows to be discarded from import -->
-    <string name="cvs_import_discard">Discard</string>
     <string name="csv_import_field_mapped_more_than_once">%s is mapped more than once.</string>
     <string name="csv_import_records_failed" tools:ignore="PluralsCandidate">%d records could not be imported.</string>
     <string name="csv_import_records_discarded" tools:ignore="PluralsCandidate">%d records were discarded.</string>
@@ -556,7 +553,6 @@
     <string name="exchange_rate">Exchange rate</string>
     <string name="date_format_hour">Hour</string>
     <string name="date_format_minute">Minute</string>
-    <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="menu_sort">Sort by</string>
     <string name="pref_sort_order_last_used">Last used</string>
     <string name="pref_sort_order_custom">Custom</string>
@@ -679,7 +675,6 @@
     <string name="professional_key">Professional Key</string>
     <string name="n_months">%d months</string>
     <string name="eu_vat_info">For residents of the European Union prices displayed do not include VAT.</string>
-    <string name="licence_migration_info">{app_name} implements a new licence validation mechanism. Please request a new key.</string>
     <string name="valid_until">Until %s</string>
     <!-- %1$s date, %2$s price  -->
     <string name="extend_until">Extend until %1$s for %2$s</string>
@@ -708,7 +703,6 @@
     <string name="pref_warning_only_one_protection">Before you can use protection by %1$s, you must switch off protection by %2$s.</string>
     <string name="warning_device_lock_screen_not_set_up_1">Secure device lock screen hasn\'t been set up.</string>
     <string name="warning_device_lock_screen_not_set_up_2">Go to \'Settings -> Security -> Screenlock\' to set up a lock screen.</string>
-    <string name="snackbar_dismiss">Dismiss</string>
     <string name="menu_history_show_balance">Show balance</string>
     <string name="menu_history_transfers">Include transfers</string>
     <string name="menu_history">History</string>
@@ -742,11 +736,11 @@
     <string name="booking_date">Booking date</string>
     <!-- the date when the entry to an account is considered effective in accounting (https://en.wikipedia.org/wiki/Value_date) as opposed to booking date -->
     <string name="value_date">Value date</string>
-    <string name="licence_expires_n_days">Your professional key will expire in %d days</string>
-    <string name="licence_expires_tomorrow">Your professional key will expire tomorrow</string>
-    <string name="licence_expires_today">Your professional key expires today</string>
-    <string name="licence_expired_yesterday">Your professional key has expired yesterday</string>
-    <string name="licence_has_expired_n_days">Your professional key has expired %d days ago</string>
+    <string name="licence_expires_n_days">Your professional key will expire in %d days.</string>
+    <string name="licence_expires_tomorrow">Your professional key will expire tomorrow.</string>
+    <string name="licence_expires_today">Your professional key expires today.</string>
+    <string name="licence_expired_yesterday">Your professional key has expired yesterday.</string>
+    <string name="licence_has_expired_n_days">Your professional key has expired %d days ago.</string>
     <string name="pref_category_title_privacy">Privacy</string>
     <string name="pref_ad_consent_title">Personalized ads</string>
     <string name="ad_consent_non_personalized">Non-personalized ads</string>
@@ -848,8 +842,6 @@
     <string name="synchronization_select_folder_dialog_title">Select an existing folder or create a new one</string>
     <!-- This message is shwon when we highlight the income / expense toogle, to make user aware of this feature  -->
     <string name="discover_feature_expense_income_switch">Use this switch button to record income.</string>
-    <!-- This message is shwon when we highlight the dropdown for switching from normal transaction to transfer or split transaction,to make user aware of this feature  -->
-    <string name="discover_feature_operation_type_select">Use this dropdown menu to record transfers between accounts or split transactions.</string>
     <string name="menu_create_budget">New budget</string>
     <string name="budget_onetime">One-time</string>
     <string name="dialog_confirm_discard_new_budget">Discard new budget?</string>
@@ -863,6 +855,7 @@
     <string name="budget_filter_all_methods">All methods</string>
     <string name="budget_filter_all_states">All status</string>
     <string name="budget_filter_all_tags">All tags</string>
+    <string name="budget_filter_all_accounts">All accounts</string>
     <string name="budget_form_label_filter">Filter</string>
     <string name="dialog_title_warning_delete_budget">Delete budget?</string>
     <string name="warning_delete_budget">Budget \"%1$s\" will be deleted.</string>
@@ -910,4 +903,83 @@
     <string name="dialog_multi_tag_replace">Replace existing tags by new tags</string>
     <string name="new_tag_hint">Enter new tag</string>
     <string name="language_download_requested">Translations for language %s are requested from Play Store</string>
+    <!-- Title for a preference that allows to decide how the time will be set for a new instance of a recurring transaction -->
+    <string name="pref_planner_manual_time_title">Time for manually applied scheduled transaction</string>
+    <!-- Option for a preference that allows to decide how the time will be set for a new instance of a recurring transaction -->
+    <string name="pref_planner_manual_time_noon">12 pm (noon)</string>
+    <!-- Option for a preference that allows to decide how the time will be set for a new instance of a recurring transaction (current time at moment of application) -->
+    <string name="pref_planner_manual_time_current">Time of application</string>
+    <!-- Title in Settings screen, and title of dynamically loaded feature module -->
+    <string name="title_scan_receipt_feature">Scan receipt</string>
+    <string name="feature_download_requested">Feature %s is requested from Play Store.</string>
+    <string name="feature_downloaded">Feature %s has been installed.</string>
+    <!-- If this mode is active, the action button will open the camera for scanning a receipt  -->
+    <string name="menu_scan_mode">Scan mode</string>
+    <!-- Button that triggers the scan operation -->
+    <string name="button_scan">Scan</string>
+    <string name="pref_ocr_total_indicators_title">Indicators for total amount</string>
+    <string name="pref_ocr_total_indicators_summary">A list of strings, which identify the total value in a receipt. Put each value on a new line. Leave empty to restore the default value.</string>
+    <string name="pref_ocr_date_formats_title">Date Formats</string>
+    <string name="pref_ocr_time_formats_title">Time Formats</string>
+    <!-- Title for a preference that allows user to decide if all transactions of the current day should be considered as past (future begins at end of day), or if the exact current time divides between past and future  -->
+    <string name="pref_criterion_futur_title">Criterion for future transactions</string>
+    <!-- Option for a preference that allows to decide that all transactions until end of day are considered past transactions -->
+    <string name="pref_criterion_future_end_of_day">End of day</string>
+    <!-- Option for a preference that allows to decide that only transactions before current time are considered past transactions -->
+    <string name="pref_criterion_future_current">Current time</string>
+    <!-- Title of a section on the Settings screen where each entry corresponds to a subsection dedicated to one feature (functionality)  -->
+    <string name="pref_category_title_features">Features</string>
+    <string name="scan_result_no_data">No data</string>
+    <!-- After text recognition has been run on an image, if multiple strings are found that can be interpreted as date, amount or payee, a dialogue is shown allowing to select between these "candidates". This message is the title of this dialogue.  -->
+    <string name="scan_result_multiple_candidates_dialog_title">Multiple candidates found. Please select:</string>
+    <string name="scan_result_no_amount">No amount found</string>
+    <string name="scan_result_no_date">No date found</string>
+    <string name="scan_result_no_payee">No payee found</string>
+    <string name="button_download">Download</string>
+    <string name="pref_feature_uninstall_title">Request deinstallation of features and languages</string>
+    <string name="pref_feature_uninstall_summary">Play Store tries to eventually remove those modules in the background.</string>
+    <string name="pref_feature_uninstall_languages_title">Languages</string>
+    <!-- Toast message shown if user clicks on Upgrade button before having selected a licence -->
+    <string name="select_package">Please select a licence package.</string>
+    <!-- This message is shwon when we highlight the floating action button and educate user about the menu that shows upon long press (tap and hold)  -->
+    <string name="discover_feature_fab_long_press">Tap and hold the flotating action button in order to directly open the form for transfers, split transactions or income.</string>
+    <!-- Label for a slider control that allows to configure a plan to be executed (added to the ledger) the give number of days in advance -->
+    <string name="advance_exexcution_in_days">Advance execution (in days)</string>
+    <string name="warning_balance_account_delete">If you proceed, all reconciled transactions of this account will be deleted from the database and you will not be able to restore them.</string>
+    <!-- When user opens a template from the transaction form, existing data is discarded. This message appears in a dialgoue to confirm the action -->
+    <string name="confirmation_load_template_discard_data">Existing form data will be discarded.</string>
+    <string name="pref_clone_with_current_date_title">Date of cloned transactions</string>
+    <string name="default_action">Default action</string>
+    <string name="template_default_action_without_amount_hint">Template without amount should be saved with default action \'Edit\'</string>
+    <string name="plan_automatic_without_amount_hint">Plan without amount should not be saved with automatic plan execution</string>
+    <string name="content_description_edit_plan">Edit plan in calendar app</string>
+    <string name="reset_equivalent_amounts_success">Equivalent amounts have been reset</string>
+    <string name="menu_save_and_new_content_description">Save the data, leave the form open for creating a new transaction with the same data.</string>
+    <!-- Title of a preference where user can select between Ml Kit and Tesseract as Engine for Optical character recognition -->
+    <string name="pref_ocr_engine_title">Engine for text recognition</string>
+    <!-- Title of a preference where user can select language for text recognition with Tesseract -->
+    <string name="pref_tesseract_language_title">Language for Tesseract</string>
+    <!-- %s is replaced with language -->
+    <string name="tesseract_download_confirmation">Do you want to download text recognition data for %s ?</string>
+    <!-- %s is replaced with language -->
+    <string name="download_completed">Download (%s) has completed.</string>
+    <!-- %s is replaced with information on the engine or application used for running text recognition -->
+    <string name="ocr_recognition_info">Running text recognition with %s</string>
+    <string name="ocr_download_info">Text recognition capability is provided by an external application.</string>
+    <!-- %s is replaced with the title of the preference for setting a passphrase for backups (pref_security_export_passphrase_title) -->
+    <string name="warning_unencrypted_backup">While your data is protected from unauthorized access on this device, backups are created without encryption, unless you configure %s.</string>
+    <!-- Title of a preference switch that allows to configure display of group header. If switched on sums for income/expense/transfer are shown -->
+    <string name="pref_group_header_show_details_summary">Show detail sums in group header</string>
+    <!-- Title of a menu item and a dialogue that allow to adjust the current balance. User can enter the new balance, and transaction form is opened with the amount prefiled to the difference between old and new balance  -->
+    <string name="new_balance">New balance</string>
+    <string name="title_webui">Web User Interface</string>
+    <string name="single_feature_info">Alternatively you can buy unlimited access to only this feature.</string>
+    <!-- This refers to a plan that recurs every last day of the month. It is shown next to a checkbox allowing user to select this type of recurrence. -->
+    <string name="recurrence_last_day_of_month">Last day</string>
+    <string name="warning_link_transfer">The two selected transactions will be linked as transfer. Payee/Payer and category information will be dropped.</string>
+    <!-- This is the title of an entry on the configuration screen for the account widget. It allows to decide which number should be displayed for each account: the current balance or the total (which included future transactions) -->
+    <string name="account_widget_configuration_sum">Type of displayed sum</string>
+    <string name="account_widget_configuration_sum_total">Include future transactions</string>
+    <!-- Title of dialogue that allows to configure account widget -->
+    <string name="account_widget_configuration">Account widget configuration</string>
 </resources>

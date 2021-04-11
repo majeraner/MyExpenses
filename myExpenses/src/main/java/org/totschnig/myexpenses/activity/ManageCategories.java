@@ -22,8 +22,6 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.View;
 
-import com.google.android.material.snackbar.Snackbar;
-
 import org.apache.commons.lang3.ArrayUtils;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.dialog.select.SelectMainCategoryDialogFragment;
@@ -82,7 +80,6 @@ public class ManageCategories extends CategoryActivity implements
   public void onCreate(Bundle savedInstanceState) {
     String action = getAction();
     int title = 0;
-    setTheme(getThemeIdEditDialog());
     super.onCreate(savedInstanceState);
     switch (action) {
       case Intent.ACTION_MAIN:
@@ -131,30 +128,29 @@ public class ManageCategories extends CategoryActivity implements
     if (super.dispatchCommand(command, tag)) {
       return true;
     }
-    switch (command) {
-      case R.id.CREATE_COMMAND:
-        createCat(null);
-        return true;
-      case R.id.DELETE_COMMAND_DO:
-        finishActionMode();
-        startTaskExecution(
-            TaskExecutionFragment.TASK_DELETE_CATEGORY,
-            (Long[]) tag,
-            null,
-            R.string.progress_dialog_deleting);
-        return true;
-      case R.id.CANCEL_CALLBACK_COMMAND:
-        finishActionMode();
-        return true;
-      case R.id.SETUP_CATEGORIES_DEFAULT_COMMAND:
-        importCats();
-        return true;
-      case R.id.EXPORT_CATEGORIES_COMMAND_ISO88591:
-        exportCats("ISO-8859-1");
-        return true;
-      case R.id.EXPORT_CATEGORIES_COMMAND_UTF8:
-        exportCats("UTF-8");
-        return true;
+    if (command == R.id.CREATE_COMMAND) {
+      createCat(null);
+      return true;
+    } else if (command == R.id.DELETE_COMMAND_DO) {
+      finishActionMode();
+      startTaskExecution(
+          TaskExecutionFragment.TASK_DELETE_CATEGORY,
+          (Long[]) tag,
+          null,
+          R.string.progress_dialog_deleting);
+      return true;
+    } else if (command == R.id.CANCEL_CALLBACK_COMMAND) {
+      finishActionMode();
+      return true;
+    } else if (command == R.id.SETUP_CATEGORIES_DEFAULT_COMMAND) {
+      importCats();
+      return true;
+    } else if (command == R.id.EXPORT_CATEGORIES_COMMAND_ISO88591) {
+      exportCats("ISO-8859-1");
+      return true;
+    } else if (command == R.id.EXPORT_CATEGORIES_COMMAND_UTF8) {
+      exportCats("UTF-8");
+      return true;
     }
     return false;
   }
@@ -176,7 +172,7 @@ public class ManageCategories extends CategoryActivity implements
           encoding,
           R.string.menu_categories_export);
     } else {
-      showSnackbar(appDirStatus.print(this), Snackbar.LENGTH_LONG);
+      showSnackbar(appDirStatus.print(this));
     }
   }
 
@@ -214,8 +210,7 @@ public class ManageCategories extends CategoryActivity implements
   public void onPostExecute(Uri result) {
     if (result == null) {
       showSnackbar(getString(R.string.already_defined,
-          mCategory != null ? mCategory.getLabel() : ""),
-          Snackbar.LENGTH_LONG);
+          mCategory != null ? mCategory.getLabel() : ""));
     }
     super.onPostExecute(result);
   }
@@ -239,7 +234,7 @@ public class ManageCategories extends CategoryActivity implements
                 PrefKey.SHARE_TARGET.getString("").trim(),
                 "text/qif");
             if (!shareResult.isSuccess()) {
-              showSnackbar(shareResult.print(this), Snackbar.LENGTH_LONG);
+              showSnackbar(shareResult.print(this));
             }
           }
           break;
@@ -247,7 +242,7 @@ public class ManageCategories extends CategoryActivity implements
           mListFragment.reset();
           break;
         case TaskExecutionFragment.TASK_DELETE_CATEGORY: {
-          showSnackbar(r.print(this), Snackbar.LENGTH_LONG);
+          showSnackbar(r.print(this));
         }
       }
     }
@@ -255,7 +250,7 @@ public class ManageCategories extends CategoryActivity implements
     if (taskId != TaskExecutionFragment.TASK_DELETE_CATEGORY /*handled in super*/) {
       final String print = r.print0(this);
       if (print != null) {
-        showSnackbar(print, Snackbar.LENGTH_LONG);
+        showSnackbar(print);
       }
     }
   }

@@ -26,14 +26,21 @@ import android.net.Uri;
 import android.os.RemoteException;
 
 import org.totschnig.myexpenses.MyApplication;
+import org.totschnig.myexpenses.di.AppComponent;
+import org.totschnig.myexpenses.preference.PrefHandler;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.provider.CalendarProviderProxy;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.provider.DbUtils;
 import org.totschnig.myexpenses.provider.TransactionProvider;
+import org.totschnig.myexpenses.util.TextUtils;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
+import org.totschnig.myexpenses.util.licence.LicenceHandler;
+import org.totschnig.myexpenses.viewmodel.data.PlanInstance;
+import org.totschnig.myexpenses.viewmodel.data.Tag;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import androidx.annotation.NonNull;
@@ -50,6 +57,7 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CATID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_COLOR;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_COMMENT;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY;
+import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_DEFAULT_ACTION;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_INSTANCEID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_LABEL;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_METHODID;
@@ -59,6 +67,7 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PAYEEID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PAYEE_NAME;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLANID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLAN_EXECUTION;
+import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_PLAN_EXECUTION_ADVANCE;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_SEALED;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_STATUS;
@@ -75,10 +84,21 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.VIEW_TEMPLATES
 import static org.totschnig.myexpenses.provider.DbUtils.getLongOrNull;
 
 public class Template extends Transaction implements ITransfer, ISplit {
+  public enum Action {
+    SAVE, EDIT;
+    public static final String JOIN;
+    static {
+      JOIN = TextUtils.joinEnum(Action.class);
+    }
+  }
   private static String PART_SELECT = "(" + KEY_PARENTID + "= ?)";
   private String title;
   public Long planId;
   private boolean planExecutionAutomatic = false;
+
+  private Action defaultAction = Action.SAVE;
+
+  private int planExecutionAdvance = 0;
 
   public Transaction getTemplate() {
     return template;
@@ -112,10 +132,6 @@ public class Template extends Transaction implements ITransfer, ISplit {
 
   public static final String[] PROJECTION_BASE, PROJECTION_EXTENDED;
 
-  public String getUuid() {
-    return uuid;
-  }
-
   static {
     PROJECTION_BASE = new String[]{
         KEY_ROWID,
@@ -133,7 +149,9 @@ public class Template extends Transaction implements ITransfer, ISplit {
         KEY_PLANID,
         KEY_PLAN_EXECUTION,
         KEY_UUID,
-        KEY_PARENTID
+        KEY_PARENTID,
+        KEY_PLAN_EXECUTION_ADVANCE,
+        KEY_DEFAULT_ACTION
     };
     int baseLength = PROJECTION_BASE.length;
     PROJECTION_EXTENDED = new String[baseLength + 3];
@@ -315,13 +333,17 @@ public class Template extends Transaction implements ITransfer, ISplit {
     planId = DbUtils.getLongOrNull(c, KEY_PLANID);
     setParentId(DbUtils.getLongOrNull(c, KEY_PARENTID));
     setPlanExecutionAutomatic(c.getInt(c.getColumnIndexOrThrow(KEY_PLAN_EXECUTION)) > 0);
+    planExecutionAdvance = c.getInt(c.getColumnIndex(KEY_PLAN_EXECUTION_ADVANCE));
     int uuidColumnIndex = c.getColumnIndexOrThrow(KEY_UUID);
     if (c.isNull(uuidColumnIndex)) {//while upgrade to DB schema 47, uuid is still null
-      uuid = generateUuid();
+      setUuid(generateUuid());
     } else {
-      uuid = DbUtils.getString(c, KEY_UUID);
+      setUuid(DbUtils.getString(c, KEY_UUID));
     }
     setSealed(c.getInt(c.getColumnIndexOrThrow(KEY_SEALED)) > 0);
+    try {
+      defaultAction = Action.valueOf(c.getString(c.getColumnIndex(KEY_DEFAULT_ACTION)));
+    } catch (IllegalArgumentException ignored) {}
   }
 
   public Template(Account account, int operationType, Long parentId) {
@@ -344,7 +366,7 @@ public class Template extends Transaction implements ITransfer, ISplit {
     setParentId(parentId);
   }
 
-  @androidx.annotation.Nullable
+  @Nullable
   public static Template getTypedNewInstance(int operationType, Long accountId, boolean forEdit, Long parentId) {
     Account account = Account.getInstanceFromDbWithFallback(accountId);
     if (account == null) {
@@ -391,7 +413,35 @@ public class Template extends Transaction implements ITransfer, ISplit {
     return t;
   }
 
-  @androidx.annotation.Nullable
+  @Nullable
+  public static PlanInstance getPlanInstance(long planId, long date) {
+    PlanInstance planInstance = null;
+    try (Cursor c = cr().query(
+        CONTENT_URI.buildUpon().appendQueryParameter(TransactionProvider.QUERY_PARAMETER_WITH_INSTANCE, String.valueOf(CalendarProviderProxy.calculateId(date))).build(),
+        null, KEY_PLANID + "= ?",
+        new String[]{String.valueOf(planId)},
+        null)) {
+      if (c != null && c.moveToFirst()) {
+        final Long instanceId = getLongOrNull(c, KEY_INSTANCEID);
+        final Long transactionId = getLongOrNull(c, KEY_TRANSACTIONID);
+        final long templateId = c.getLong(c.getColumnIndex(KEY_ROWID));
+        final CurrencyContext currencyContext = MyApplication.getInstance().getAppComponent().currencyContext();
+        CurrencyUnit currency = currencyContext.get(c.getString(c.getColumnIndex(KEY_CURRENCY)));
+        Money amount = new Money(currency, c.getLong(c.getColumnIndex(KEY_AMOUNT)));
+        planInstance = new PlanInstance(templateId, instanceId, transactionId, c.getString(c.getColumnIndex(KEY_TITLE)), date, c.getInt(c.getColumnIndex(KEY_COLOR)), amount,
+            c.getInt(c.getColumnIndex(KEY_SEALED)) == 1);
+      }
+    }
+    return planInstance;
+  }
+
+  @Nullable
+  public static kotlin.Pair<Transaction, List<Tag>> getInstanceFromDbWithTags(long id) {
+    Template t = getInstanceFromDb(id);
+    return t == null ? null : new kotlin.Pair<>(t, t.loadTags());
+  }
+
+  @Nullable
   public static Template getInstanceFromDb(long id) {
     Cursor c = cr().query(
         CONTENT_URI.buildUpon().appendPath(String.valueOf(id)).build(), null, null, null, null);
@@ -408,6 +458,27 @@ public class Template extends Transaction implements ITransfer, ISplit {
     if (t.planId != null) {
       t.plan = Plan.getInstanceFromDb(t.planId);
     }
+    return t;
+  }
+
+  public static Template getInstanceFromDbIfInstanceIsOpen(long id, long instanceId) {
+    Cursor c = cr().query(
+        CONTENT_URI,
+        null,
+        KEY_ROWID + "= ? AND NOT exists(SELECT 1 from " + TABLE_PLAN_INSTANCE_STATUS
+            + " WHERE " + KEY_INSTANCEID + " = ? AND " + KEY_TEMPLATEID + " = " + KEY_ROWID + ")",
+        new String[]{String.valueOf(id), String.valueOf(instanceId)},
+        null);
+    if (c == null) {
+      return null;
+    }
+    if (c.getCount() == 0) {
+      c.close();
+      return null;
+    }
+    c.moveToFirst();
+    Template t = new Template(c);
+    c.close();
     return t;
   }
 
@@ -443,6 +514,8 @@ public class Template extends Transaction implements ITransfer, ISplit {
     initialValues.put(KEY_TITLE, getTitle());
     initialValues.put(KEY_PLANID, planId);
     initialValues.put(KEY_PLAN_EXECUTION, isPlanExecutionAutomatic());
+    initialValues.put(KEY_PLAN_EXECUTION_ADVANCE, planExecutionAdvance);
+    initialValues.put(KEY_DEFAULT_ACTION, defaultAction.name());
     initialValues.put(KEY_ACCOUNTID, getAccountId());
     ArrayList<ContentProviderOperation> ops = new ArrayList<>();
     if (getId() == 0) {
@@ -454,7 +527,7 @@ public class Template extends Transaction implements ITransfer, ISplit {
         if (withLinkedTransaction != null) {
           ops.add(ContentProviderOperation.newInsert(TransactionProvider.PLAN_INSTANCE_STATUS_URI)
               .withValueBackReference(KEY_TEMPLATEID, 0)
-              .withValue(KEY_INSTANCEID, CalendarProviderProxy.calculateId(plan.dtstart))
+              .withValue(KEY_INSTANCEID, CalendarProviderProxy.calculateId(plan.getDtStart()))
               .withValue(KEY_TRANSACTIONID, withLinkedTransaction)
               .build());
         }
@@ -473,7 +546,7 @@ public class Template extends Transaction implements ITransfer, ISplit {
       if (withLinkedTransaction != null) {
         ops.add(ContentProviderOperation.newInsert(TransactionProvider.PLAN_INSTANCE_STATUS_URI)
             .withValue(KEY_TEMPLATEID, getId())
-            .withValue(KEY_INSTANCEID, CalendarProviderProxy.calculateId(plan.dtstart))
+            .withValue(KEY_INSTANCEID, CalendarProviderProxy.calculateId(plan.getDtStart()))
             .withValue(KEY_TRANSACTIONID, withLinkedTransaction)
             .build());
       }
@@ -560,12 +633,12 @@ public class Template extends Transaction implements ITransfer, ISplit {
       Timber.d("Template differs %d" , 7);
       return false;
     }
-    if (uuid == null) {
-      if (other.uuid != null) {
+    if (getUuid() == null) {
+      if (other.getUuid() != null) {
         Timber.d("Template differs %d" , 8);
         return false;
       }
-    } else if (!uuid.equals(other.uuid)) {
+    } else if (!getUuid().equals(other.getUuid())) {
       Timber.d("Template differs %d" , 9);
       return false;
     }
@@ -577,25 +650,28 @@ public class Template extends Transaction implements ITransfer, ISplit {
     int result = this.getTitle() != null ? this.getTitle().hashCode() : 0;
     result = 31 * result + (this.planId != null ? this.planId.hashCode() : 0);
     result = 31 * result + (this.isPlanExecutionAutomatic() ? 1 : 0);
-    result = 31 * result + (this.uuid != null ? this.uuid.hashCode() : 0);
+    result = 31 * result + (this.getUuid() != null ? this.getUuid().hashCode() : 0);
     return result;
   }
 
   public static void updateNewPlanEnabled() {
+    final AppComponent appComponent = MyApplication.getInstance().getAppComponent();
+    LicenceHandler licenceHandler = appComponent.licenceHandler();
+    PrefHandler prefHandler = appComponent.prefHandler();
     boolean newPlanEnabled = true, newSplitTemplateEnabled = true;
-    if (!ContribFeature.PLANS_UNLIMITED.hasAccess()) {
+    if (!licenceHandler.hasAccessTo(ContribFeature.PLANS_UNLIMITED)) {
       if (count(Template.CONTENT_URI, KEY_PLANID + " is not null", null) >= ContribFeature.FREE_PLANS) {
         newPlanEnabled = false;
       }
     }
-    PrefKey.NEW_PLAN_ENABLED.putBoolean(newPlanEnabled);
+    prefHandler.putBoolean(PrefKey.NEW_PLAN_ENABLED, newPlanEnabled);
 
-    if (!ContribFeature.SPLIT_TEMPLATE.hasAccess()) {
+    if (!licenceHandler.hasAccessTo(ContribFeature.SPLIT_TEMPLATE)) {
       if (count(Template.CONTENT_URI, KEY_CATID + " = " + DatabaseConstants.SPLIT_CATID, null) >= ContribFeature.FREE_SPLIT_TEMPLATES) {
         newSplitTemplateEnabled = false;
       }
     }
-    PrefKey.NEW_SPLIT_TEMPLATE_ENABLED.putBoolean(newSplitTemplateEnabled);
+    prefHandler.putBoolean(PrefKey.NEW_SPLIT_TEMPLATE_ENABLED, newSplitTemplateEnabled);
   }
 
   public boolean isPlanExecutionAutomatic() {
@@ -604,6 +680,14 @@ public class Template extends Transaction implements ITransfer, ISplit {
 
   public void setPlanExecutionAutomatic(boolean planExecutionAutomatic) {
     this.planExecutionAutomatic = planExecutionAutomatic;
+  }
+
+  public int getPlanExecutionAdvance() {
+    return planExecutionAdvance;
+  }
+
+  public void setPlanExecutionAdvance(int planExecutionAdvance) {
+    this.planExecutionAdvance = planExecutionAdvance;
   }
 
   public String getTitle() {
@@ -669,5 +753,13 @@ public class Template extends Transaction implements ITransfer, ISplit {
 
   public static void cleanupCanceledEdit(Long id) {
     cleanupCanceledEdit(id, CONTENT_URI, PART_SELECT);
+  }
+
+  public Action getDefaultAction() {
+    return defaultAction;
+  }
+
+  public void setDefaultAction(Action defaultAction) {
+    this.defaultAction = defaultAction;
   }
 }

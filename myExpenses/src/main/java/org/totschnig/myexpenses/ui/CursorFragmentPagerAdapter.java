@@ -49,6 +49,7 @@ public abstract class CursorFragmentPagerAdapter extends FragmentPagerAdapter {
         mDataValid = cursorPresent;
         mContext = context;
         mRowIDColumn = cursorPresent ? c.getColumnIndexOrThrow("_id") : -1;
+        setItemPositions();
     }
 
     public Cursor getCursor() {
@@ -111,7 +112,7 @@ public abstract class CursorFragmentPagerAdapter extends FragmentPagerAdapter {
 
         int rowId = mCursor.getInt(mRowIDColumn);
         Object obj = super.instantiateItem(container, position);
-        mObjectMap.put(obj, Integer.valueOf(rowId));
+        mObjectMap.put(obj, rowId);
 
         return obj;
     }
@@ -124,13 +125,6 @@ public abstract class CursorFragmentPagerAdapter extends FragmentPagerAdapter {
             return mCursor.getCount();
         } else {
             return 0;
-        }
-    }
-
-    public void changeCursor(Cursor cursor) {
-        Cursor old = swapCursor(cursor);
-        if (old != null) {
-            old.close();
         }
     }
 

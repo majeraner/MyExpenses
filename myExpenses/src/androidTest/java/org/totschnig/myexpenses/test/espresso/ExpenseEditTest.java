@@ -6,7 +6,6 @@ import android.os.RemoteException;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.activity.ExpenseEdit;
@@ -20,9 +19,10 @@ import org.totschnig.myexpenses.testutils.BaseUiTest;
 
 import java.util.Currency;
 import java.util.Locale;
+import java.util.Objects;
 
-import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.rule.ActivityTestRule;
+import androidx.annotation.NonNull;
+import androidx.test.core.app.ActivityScenario;
 
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
@@ -46,11 +46,7 @@ import static org.totschnig.myexpenses.testutils.Espresso.withIdAndParent;
 
 public class ExpenseEditTest extends BaseUiTest {
 
-  @Rule
-  public ActivityTestRule<ExpenseEdit> mActivityRule =
-      new ActivityTestRule<>(ExpenseEdit.class, false, false);
-  private String accountLabel1 = "Test label 1";
-  private String accountLabel2 = "Test label 2";
+  private ActivityScenario<ExpenseEdit> activityScenario = null;
   private Account account1;
   private Account account2;
   private CurrencyUnit currency1;
@@ -58,10 +54,13 @@ public class ExpenseEditTest extends BaseUiTest {
 
   @Before
   public void fixture() {
-    currency1 = CurrencyUnit.create(Currency.getInstance("USD"));
-    currency2 = CurrencyUnit.create(Currency.getInstance("EUR"));
+    configureLocale(Locale.GERMANY);
+    currency1 = new CurrencyUnit(Currency.getInstance("USD"));
+    currency2 = new CurrencyUnit(Currency.getInstance("EUR"));
+    String accountLabel1 = "Test label 1";
     account1 = new Account(accountLabel1, currency1, 0, "", AccountType.CASH, Account.DEFAULT_COLOR);
     account1.save();
+    String accountLabel2 = "Test label 2";
     account2 = new Account(accountLabel2, currency2, 0, "", AccountType.BANK, Account.DEFAULT_COLOR);
     account2.save();
   }
@@ -70,16 +69,19 @@ public class ExpenseEditTest extends BaseUiTest {
   public void tearDown() throws RemoteException, OperationApplicationException {
     Account.delete(account1.getId());
     Account.delete(account2.getId());
+    activityScenario.close();
   }
 
   @Test
   public void formForTransactionIsPrepared() {
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     checkEffectiveVisible(R.id.DateTimeRow, R.id.AmountRow, R.id.CommentRow, R.id.CategoryRow,
-        R.id.PayeeRow, R.id.AccountRow, R.id.Recurrence);
-    checkEffectiveGone(R.id.Status);
+        R.id.PayeeRow, R.id.AccountRow);
+    checkEffectiveGone(R.id.Status, R.id.Recurrence, R.id.TitleRow);
+    clickMenuItem(R.id.CREATE_TEMPLATE_COMMAND);
+    checkEffectiveVisible(R.id.TitleRow, R.id.Recurrence);
     checkAccountDependents();
   }
 
@@ -90,41 +92,47 @@ public class ExpenseEditTest extends BaseUiTest {
 
   @Test
   public void statusIsShownWhenBankAccountIsSelected() {
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
     i.putExtra(KEY_ACCOUNTID, account2.getId());
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     checkEffectiveVisible(R.id.Status);
   }
 
   @Test
   public void formForTransferIsPrepared() {
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(OPERATION_TYPE, TYPE_TRANSFER);
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     checkEffectiveVisible(R.id.DateTimeRow, R.id.AmountRow, R.id.CommentRow, R.id.AccountRow,
-        R.id.TransferAccountRow, R.id.Recurrence);
+        R.id.TransferAccountRow);
+    checkEffectiveGone(R.id.Status, R.id.Recurrence, R.id.TitleRow);
+    clickMenuItem(R.id.CREATE_TEMPLATE_COMMAND);
+    checkEffectiveVisible(R.id.TitleRow, R.id.Recurrence);
     checkAccountDependents();
   }
 
   @Test
   public void formForSplitIsPrepared() {
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(OPERATION_TYPE, TYPE_SPLIT);
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     checkEffectiveVisible(R.id.DateTimeRow, R.id.AmountRow, R.id.CommentRow, R.id.SplitContainer,
-        R.id.PayeeRow, R.id.AccountRow, R.id.Recurrence);
+        R.id.PayeeRow, R.id.AccountRow);
+    checkEffectiveGone(R.id.Status, R.id.Recurrence, R.id.TitleRow);
+    clickMenuItem(R.id.CREATE_TEMPLATE_COMMAND);
+    checkEffectiveVisible(R.id.TitleRow, R.id.Recurrence);
     checkAccountDependents();
   }
 
   @Test
   public void formForTemplateIsPrepared() {
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
     i.putExtra(KEY_NEW_TEMPLATE, true);
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     checkEffectiveVisible(R.id.TitleRow, R.id.AmountRow, R.id.CommentRow, R.id.CategoryRow,
-        R.id.PayeeRow, R.id.AccountRow, R.id.Recurrence);
+        R.id.PayeeRow, R.id.AccountRow, R.id.Recurrence, R.id.DefaultActionRow);
     checkEffectiveGone(R.id.PB);
   }
 
@@ -132,12 +140,11 @@ public class ExpenseEditTest extends BaseUiTest {
   public void accountIdInExtraShouldPopulateSpinner() {
     Account[] allAccounts = {account1, account2};
     for (Account a : allAccounts) {
-      Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+      Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
       i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
       i.putExtra(DatabaseConstants.KEY_ACCOUNTID, a.getId());
-      mActivityRule.launchActivity(i);
+      activityScenario = ActivityScenario.launch(i);
       onView(withId(R.id.Account)).check(matches(withSpinnerText(a.getLabel())));
-      mActivityRule.getActivity().finish();
     }
   }
 
@@ -146,27 +153,28 @@ public class ExpenseEditTest extends BaseUiTest {
     CurrencyUnit[] allCurrencies = {currency1, currency2};
     for (CurrencyUnit c : allCurrencies) {
       //we assume that Fixture has set up the default account with id 1
-      Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+      Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
       i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
-      i.putExtra(DatabaseConstants.KEY_CURRENCY, c.code());
-      mActivityRule.launchActivity(i);
-      assertEquals("Account is not selected", c, mActivityRule.getActivity().getCurrentAccount().getCurrency());
-      mActivityRule.getActivity().finish();
+      i.putExtra(DatabaseConstants.KEY_CURRENCY, c.getCode());
+      activityScenario = ActivityScenario.launch(i);
+      activityScenario.onActivity(activity ->
+          assertEquals("Selected account has wrong currency", c.getCode(), activity.getCurrentAccount().getCurrency().getCode()));
     }
   }
 
   @Test
   public void saveAsNewWorksMultipleTimesInARow() {
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
     i.putExtra(DatabaseConstants.KEY_ACCOUNTID, account1.getId());
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     String success = getString(R.string.save_transaction_and_new_success);
     int times = 5;
     int amount = 2;
+    clickMenuItem(R.id.SAVE_AND_NEW_COMMAND, false); //toggle save and new on
     for (int j = 0; j < times; j++) {
       onView(withIdAndParent(R.id.AmountEditText, R.id.Amount)).perform(typeText(String.valueOf(amount)));
-      onView(withId(R.id.SAVE_AND_NEW_COMMAND)).perform(click());
+      onView(withId(R.id.CREATE_COMMAND)).perform(click());
       onView(withText(success)).check(matches(isDisplayed()));
     }
     //we assume two fraction digits
@@ -179,19 +187,20 @@ public class ExpenseEditTest extends BaseUiTest {
     template.setTransferAccountId(account2.getId());
     template.setTitle("Test template");
     template.save();
-    Intent i = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), ExpenseEdit.class);
+    Intent i = new Intent(getTargetContext(), ExpenseEdit.class);
     i.putExtra(KEY_TEMPLATEID, template.getId());
-    mActivityRule.launchActivity(i);
+    activityScenario = ActivityScenario.launch(i);
     int amount = 2;
     onView(withIdAndParent(R.id.AmountEditText, R.id.Amount)).perform(click(), typeText(String.valueOf(amount)));
-    onView(withId(R.id.SAVE_COMMAND)).perform(click());
+    onView(withId(R.id.CREATE_COMMAND)).perform(click());
     Template restored = Template.getInstanceFromDb(template.getId());
     assertEquals(TYPE_TRANSFER, restored.operationType());
-    assertEquals(-amount * 100, restored.getAmount().getAmountMinor().longValue());
+    assertEquals(-amount * 100, restored.getAmount().getAmountMinor());
   }
 
+  @NonNull
   @Override
-  protected ActivityTestRule<? extends ProtectedFragmentActivity> getTestRule() {
-    return mActivityRule;
+  protected ActivityScenario<? extends ProtectedFragmentActivity> getTestScenario() {
+    return Objects.requireNonNull(activityScenario);
   }
 }

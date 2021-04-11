@@ -11,8 +11,6 @@ import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.google.android.material.snackbar.Snackbar;
-
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
@@ -30,14 +28,14 @@ import javax.inject.Inject;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.ListFragment;
-import androidx.lifecycle.ViewModelProviders;
+import androidx.lifecycle.ViewModelProvider;
 
+import static org.totschnig.myexpenses.activity.ConstantsKt.EDIT_REQUEST;
 import static org.totschnig.myexpenses.dialog.EditCurrencyDialog.KEY_RESULT;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY;
 import static org.totschnig.myexpenses.util.Utils.isFrameworkCurrency;
 
 public class CurrencyList extends ListFragment {
-  private static final int EDIT_REQUEST = 1;
   private EditCurrencyViewModel currencyViewModel;
   private CurrencyAdapter currencyAdapter;
 
@@ -47,19 +45,18 @@ public class CurrencyList extends ListFragment {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    MyApplication.getInstance().getAppComponent().inject(this);
+    ((MyApplication) requireActivity().getApplication()).getAppComponent().inject(this);
     setAdapter();
-    currencyViewModel = ViewModelProviders.of(this).get(EditCurrencyViewModel.class);
+    currencyViewModel = new ViewModelProvider(this).get(EditCurrencyViewModel.class);
     currencyViewModel.getCurrencies().observe(this, currencies -> {
       currencyAdapter.clear();
       currencyAdapter.addAll(currencies);
     });
     currencyViewModel.getDeleteComplete().observe(this, success -> {
       if (success != null && !success) {
-        ((ProtectedFragmentActivity) getActivity()).showSnackbar(R.string.currency_still_used, Snackbar.LENGTH_LONG);
+        ((ProtectedFragmentActivity) getActivity()).showSnackbar(R.string.currency_still_used);
       }
     });
-    currencyViewModel.loadCurrencies();
   }
 
   @Override
@@ -71,7 +68,7 @@ public class CurrencyList extends ListFragment {
   @Override
   public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
     Currency currency = currencyAdapter.getItem(((AdapterView.AdapterContextMenuInfo) menuInfo).position);
-    if (!isFrameworkCurrency(currency.code())) {
+    if (!isFrameworkCurrency(currency.getCode())) {
       menu.add(0, R.id.DELETE_COMMAND, 0, R.string.menu_delete);
     }
   }
@@ -80,7 +77,7 @@ public class CurrencyList extends ListFragment {
   public boolean onContextItemSelected(MenuItem item) {
     if (item.getItemId() == R.id.DELETE_COMMAND) {
       currencyViewModel.deleteCurrency(
-          currencyAdapter.getItem(((AdapterView.AdapterContextMenuInfo) item.getMenuInfo()).position).code());
+          currencyAdapter.getItem(((AdapterView.AdapterContextMenuInfo) item.getMenuInfo()).position).getCode());
       return true;
     }
     return false;
@@ -93,10 +90,10 @@ public class CurrencyList extends ListFragment {
       public View getView(int position, View convertView, @NonNull ViewGroup parent) {
         TextView v = (TextView) super.getView(position, convertView, parent);
         Currency item = currencyAdapter.getItem(position);
-        final CurrencyUnit currencyUnit = currencyContext.get(item.code());
+        final CurrencyUnit currencyUnit = currencyContext.get(item.getCode());
         v.setText(String.format(Locale.getDefault(), "%s (%s, %d)", v.getText(),
-            currencyUnit.symbol(),
-            currencyUnit.fractionDigits()));
+            currencyUnit.getSymbol(),
+            currencyUnit.getFractionDigits()));
         return v;
       }
     };
@@ -110,7 +107,7 @@ public class CurrencyList extends ListFragment {
       if (data != null) {
         int result = data.getIntExtra(KEY_RESULT, 0);
         ((ProtectedFragmentActivity) getActivity()).showSnackbar(
-            getString(R.string.change_fraction_digits_result, result, data.getStringExtra(KEY_CURRENCY)), Snackbar.LENGTH_LONG);
+            getString(R.string.change_fraction_digits_result, result, data.getStringExtra(KEY_CURRENCY)));
       }
     }
   }
@@ -120,6 +117,6 @@ public class CurrencyList extends ListFragment {
     Currency item = currencyAdapter.getItem(position);
     final EditCurrencyDialog editCurrencyDialog = EditCurrencyDialog.newInstance(item);
     editCurrencyDialog.setTargetFragment(this, EDIT_REQUEST);
-    editCurrencyDialog.show(getFragmentManager(), "SET_FRACTION_DIGITS");
+    editCurrencyDialog.show(getParentFragmentManager(), "SET_FRACTION_DIGITS");
   }
 }

@@ -8,6 +8,7 @@ import icepick.State
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.contract.TransactionsContract.Transactions.TYPE_TRANSACTION
 import org.totschnig.myexpenses.databinding.DateEditBinding
+import org.totschnig.myexpenses.databinding.MethodRowBinding
 import org.totschnig.myexpenses.databinding.OneExpenseBinding
 import org.totschnig.myexpenses.model.CurrencyContext
 import org.totschnig.myexpenses.model.ITransaction
@@ -22,8 +23,8 @@ import org.totschnig.myexpenses.provider.DbUtils
 import org.totschnig.myexpenses.util.UiUtils
 import org.totschnig.myexpenses.util.Utils
 
-class CategoryDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, prefHandler: PrefHandler, isTemplate: Boolean)
-    : MainDelegate<ITransaction>(viewBinding, dateEditBinding, prefHandler, isTemplate) {
+class CategoryDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, methodRowBinding: MethodRowBinding, prefHandler: PrefHandler, isTemplate: Boolean)
+    : MainDelegate<ITransaction>(viewBinding, dateEditBinding, methodRowBinding, prefHandler, isTemplate) {
 
     override val operationType = TYPE_TRANSACTION
 
@@ -50,8 +51,8 @@ class CategoryDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
         }
         setCategoryButton()
         val homeCurrency = Utils.getHomeCurrency()
-        addCurrencyToInput(viewBinding.EquivalentAmountLabel, viewBinding.EquivalentAmount, homeCurrency.symbol(), R.string.menu_equivalent_amount)
-        viewBinding.EquivalentAmount.setFractionDigits(homeCurrency.fractionDigits())
+        addCurrencyToInput(viewBinding.EquivalentAmountLabel, viewBinding.EquivalentAmount, homeCurrency, R.string.menu_equivalent_amount)
+        viewBinding.EquivalentAmount.setFractionDigits(homeCurrency.fractionDigits)
     }
 
     override fun buildMainTransaction(accountId: Long): ITransaction =
@@ -72,16 +73,17 @@ class CategoryDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
     /**
      * set label on category button
      */
-    fun setCategoryButton() {
-        if (!label.isNullOrEmpty()) {
-            viewBinding.Category.text = label
-            viewBinding.ClearCategory.visibility = View.VISIBLE
-            UiUtils.setCompoundDrawablesCompatWithIntrinsicBounds(viewBinding.Category,
-                    if (categoryIcon != null) UiUtils.resolveIcon(viewBinding.root.context, categoryIcon) else 0, 0, 0, 0)
-        } else {
+    private fun setCategoryButton() {
+        if (label.isNullOrEmpty()) {
             viewBinding.Category.setText(R.string.select)
             viewBinding.ClearCategory.visibility = View.GONE
+        } else {
+            viewBinding.Category.text = label
+            viewBinding.ClearCategory.visibility = View.VISIBLE
+
         }
+        UiUtils.setCompoundDrawablesCompatWithIntrinsicBounds(viewBinding.Category,
+                if (categoryIcon != null) UiUtils.resolveIcon(viewBinding.root.context, categoryIcon) else 0, 0, 0, 0)
     }
 
     override fun populateFields(transaction: ITransaction, withAutoFill: Boolean) {
@@ -108,7 +110,7 @@ class CategoryDelegate(viewBinding: OneExpenseBinding, dateEditBinding: DateEdit
             }
             val columnIndexAmount = data.getColumnIndex(DatabaseConstants.KEY_AMOUNT)
             val columnIndexCurrency = data.getColumnIndex(DatabaseConstants.KEY_CURRENCY)
-            if (validateAmountInput(viewBinding.Amount, false, true) == null && columnIndexAmount != -1 && columnIndexCurrency != -1) {
+            if (validateAmountInput(viewBinding.Amount, showToUser = false, ifPresent = true) == null && columnIndexAmount != -1 && columnIndexCurrency != -1) {
                 val beforeType = isIncome
                 fillAmount(Money(currencyContext[data.getString(columnIndexCurrency)], data.getLong(columnIndexAmount)).amountMajor)
                 configureType()

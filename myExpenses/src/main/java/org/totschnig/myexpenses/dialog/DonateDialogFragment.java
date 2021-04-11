@@ -22,6 +22,7 @@ import android.content.DialogInterface.OnClickListener;
 import android.os.Bundle;
 
 import com.annimon.stream.IntStream;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.activity.ContribInfoDialogActivity;
@@ -34,7 +35,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
-public class DonateDialogFragment extends CommitSafeDialogFragment {
+public class DonateDialogFragment extends BaseDialogFragment {
 
   private static final String KEY_PACKAGE = "package";
   @Inject
@@ -43,7 +44,7 @@ public class DonateDialogFragment extends CommitSafeDialogFragment {
   public static DonateDialogFragment newInstance(Package aPackage) {
     DonateDialogFragment fragment = new DonateDialogFragment();
     Bundle args = new Bundle();
-    args.putSerializable(KEY_PACKAGE, aPackage);
+    args.putParcelable(KEY_PACKAGE, aPackage);
     fragment.setArguments(args);
     return fragment;
   }
@@ -51,7 +52,7 @@ public class DonateDialogFragment extends CommitSafeDialogFragment {
   @Override
   public void onCreate(@Nullable Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    MyApplication.getInstance().getAppComponent().inject(this);
+    ((MyApplication) requireActivity().getApplication()).getAppComponent().inject(this);
   }
 
   @NonNull
@@ -60,7 +61,7 @@ public class DonateDialogFragment extends CommitSafeDialogFragment {
     Package aPackage = getPackage();
     DonationUriVisitor listener = new DonationUriVisitor();
 
-    AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+    AlertDialog.Builder builder = new MaterialAlertDialogBuilder(getActivity());
     CharSequence[] items = IntStream.of(getPaymentOptions(aPackage)).mapToObj(this::getString).toArray(String[]::new);
     return builder
         .setTitle(licenceHandler.getButtonLabel(aPackage))
@@ -70,8 +71,10 @@ public class DonateDialogFragment extends CommitSafeDialogFragment {
 
   @NonNull
   private Package getPackage() {
-    Package aPackage= (Package) getArguments().getSerializable(KEY_PACKAGE);
-    if (aPackage == null) aPackage = Package.Contrib;
+    Package aPackage= getArguments().getParcelable(KEY_PACKAGE);
+    if (aPackage == null) {
+      aPackage = Package.Contrib.INSTANCE;
+    }
     return aPackage;
   }
 
@@ -86,11 +89,11 @@ public class DonateDialogFragment extends CommitSafeDialogFragment {
   }
 
   private int[] getPaymentOptions(Package aPackage) {
-    return MyApplication.getInstance().getLicenceHandler().getPaymentOptions(aPackage);
+    return licenceHandler.getPaymentOptions(aPackage);
   }
 
   @Override
-  public void onCancel(DialogInterface dialog) {
+  public void onCancel(@NonNull DialogInterface dialog) {
     if (getActivity() instanceof ContribInfoDialogActivity) {
       getActivity().finish();
     }

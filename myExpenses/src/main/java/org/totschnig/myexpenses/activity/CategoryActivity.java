@@ -5,7 +5,7 @@ import android.text.InputType;
 
 import org.totschnig.myexpenses.BuildConfig;
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.fragment.CategoryList;
+import org.totschnig.myexpenses.fragment.AbstractCategoryList;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.task.TaskExecutionFragment;
 import org.totschnig.myexpenses.viewmodel.data.Category;
@@ -25,7 +25,7 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ICON;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_LABEL;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID;
 
-public abstract class CategoryActivity<T extends CategoryList> extends ProtectedFragmentActivity implements
+public abstract class CategoryActivity<T extends AbstractCategoryList<?>> extends ProtectedFragmentActivity implements
     SimpleFormDialog.OnDialogResultListener {
   protected static final String DIALOG_NEW_CATEGORY = "dialogNewCat";
   protected static final String DIALOG_EDIT_CATEGORY = "dialogEditCat";
@@ -47,8 +47,6 @@ public abstract class CategoryActivity<T extends CategoryList> extends Protected
   /**
    * presents AlertDialog for adding a new category
    * if label is already used, shows an error
-   *
-   * @param parentId
    */
   public void createCat(Long parentId) {
     Bundle args = new Bundle();
@@ -65,12 +63,12 @@ public abstract class CategoryActivity<T extends CategoryList> extends Protected
         .show(this, DIALOG_NEW_CATEGORY);
   }
 
-  private FormElement buildLabelField(String text) {
+  private Input buildLabelField(String text) {
     return Input.plain(KEY_LABEL).required().hint(R.string.label).text(text)
         .inputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
   }
 
-  private FormElement buildIconField(String preset) {
+  private SelectIconField buildIconField(String preset) {
     return SelectIconField.picker(KEY_ICON).icons(BuildConfig.CATEGORY_ICONS).preset(preset).label(R.string.icon);
   }
 
@@ -79,11 +77,11 @@ public abstract class CategoryActivity<T extends CategoryList> extends Protected
    */
   public void editCat(Category category) {
     Bundle args = new Bundle();
-    args.putLong(KEY_ROWID, category.id);
-    final FormElement labelInput = buildLabelField(category.label);
-    final FormElement iconField = buildIconField(category.icon);
-    final FormElement[] formElements = category.parentId == null ?
-        new FormElement[]{labelInput, SelectColorField.picker(KEY_COLOR).label(R.string.color).color(category.color), iconField} :
+    args.putLong(KEY_ROWID, category.getId());
+    final Input labelInput = buildLabelField(category.getLabel());
+    final SelectIconField iconField = buildIconField(category.getIcon());
+    final FormElement<? ,?>[] formElements = category.getParentId() == null ?
+        new FormElement[]{labelInput, SelectColorField.picker(KEY_COLOR).label(R.string.color).color(category.getColor()), iconField} :
         new FormElement[]{labelInput, iconField};
     SimpleFormDialog.build()
         .title(R.string.menu_edit_cat)
@@ -97,13 +95,13 @@ public abstract class CategoryActivity<T extends CategoryList> extends Protected
 
   public void editCategoryColor(Category c) {
     Bundle args = new Bundle();
-    args.putLong(KEY_ROWID, c.id);
+    args.putLong(KEY_ROWID, c.getId());
     SimpleColorDialog.build()
         .allowCustom(true)
         .cancelable(false)
         .neut()
         .extra(args)
-        .colorPreset(c.color)
+        .colorPreset(c.getColor())
         .show(this, EDIT_COLOR_DIALOG);
   }
 

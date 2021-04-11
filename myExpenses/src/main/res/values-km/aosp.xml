@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2011 Google Inc.
+     Licensed to The Android Open Source Project.
+-->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="drawer_open">"បើក​ផ្ទាំង​បញ្ជីកម្មវិធី"</string>
+    <string name="drawer_close">"បិទ​​​ផ្ទាំង​​​បញ្ជី​កម្មវិធី"</string>
+    <string name="toast_text_copied">"បាន​ចម្លង​អត្ថបទ"</string>
+    <string name="copy_text">"ចម្លង​ទៅអង្គចងចាំ"</string>
+    <string name="stop">"ឈប់"</string>
+    <string name="no_network">"មិន​មាន​ការ​តភ្ជាប់​បណ្ដាញ។"</string>
+    <string name="button_label_continue">បន្ត</string>
+    <string name="autofill">"បំពេញ​ដោយស្វ័យ​ប្រវត្តិ"</string>
+    <string name="discard">"បោះបង់"</string>
+    <string name="dialog_dismiss">"បដិសេធ"</string>
+    <string name="response_yes">"បាទ/ចាស"</string>
+    <string name="response_no">"ទេ"</string>
+</resources>
+

@@ -21,18 +21,13 @@ import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
 
-import org.apache.commons.csv.CSVRecord;
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.export.qif.QifDateFormat;
-import org.totschnig.myexpenses.fragment.CsvImportDataFragment;
-import org.totschnig.myexpenses.model.AccountType;
 import org.totschnig.myexpenses.model.CurrencyUnit;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
-import org.totschnig.myexpenses.util.SparseBooleanArrayParcelable;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -44,12 +39,12 @@ import timber.log.Timber;
  * configuration changes. It handles several task that each operate on a single
  * db object identified by its row id
  */
+@Deprecated
 public class TaskExecutionFragment<T> extends Fragment {
   private static final String KEY_EXTRA = "extra";
   @Deprecated
   public static final String KEY_OBJECT_IDS = "objectIds";
   public static final String KEY_LONG_IDS = "longIds";
-  private static final String KEY_STRING_IDS = "stringIds";
   private static final String KEY_RUNNING = "running";
   private static final String KEY_TASKID = "taskId";
   public static final String KEY_WITH_PARTIES = "withParties";
@@ -59,7 +54,6 @@ public class TaskExecutionFragment<T> extends Fragment {
   public static final String KEY_DATE_FORMAT = "dateFormat";
   public static final String KEY_ENCODING = "encoding";
   public static final String KEY_FORMAT = "format";
-  public static final String KEY_DELIMITER = "delimiter";
 
   public static final int TASK_DELETE_TRANSACTION = 6;
   public static final int TASK_DELETE_ACCOUNT = 7;
@@ -88,8 +82,6 @@ public class TaskExecutionFragment<T> extends Fragment {
   public static final int TASK_SAVE_IMAGES = 33;
   public static final int TASK_UNDELETE_TRANSACTION = 34;
   public static final int TASK_EXPORT_CATEGORIES = 35;
-  public static final int TASK_CSV_PARSE = 36;
-  public static final int TASK_CSV_IMPORT = 37;
   public static final int TASK_MOVE_CATEGORY = 38;
   public static final int TASK_SWAP_SORT_KEY = 39;
   public static final int TASK_MOVE_UNCOMMITED_SPLIT_PARTS = 40;
@@ -105,8 +97,6 @@ public class TaskExecutionFragment<T> extends Fragment {
    * verify if a given uuid exists in a given backend
    */
   public static final int TASK_SYNC_CHECK = 49;
-
-  public static final int TASK_INIT = 50;
 
   public static final int TASK_FETCH_SYNC_ACCOUNT_DATA = 51;
   public static final int TASK_SETUP_FROM_SYNC_ACCOUNTS = 52;
@@ -194,38 +184,6 @@ public class TaskExecutionFragment<T> extends Fragment {
     return f;
   }
 
-  public static TaskExecutionFragment newInstanceCSVParse(
-      Uri mUri, char delimiter, String encoding) {
-    TaskExecutionFragment f = new TaskExecutionFragment();
-    Bundle bundle = new Bundle();
-    bundle.putInt(KEY_TASKID, TASK_CSV_PARSE);
-    bundle.putParcelable(KEY_FILE_PATH, mUri);
-    bundle.putChar(KEY_DELIMITER, delimiter);
-    bundle.putString(KEY_ENCODING, encoding);
-    f.setArguments(bundle);
-    return f;
-  }
-
-  public static TaskExecutionFragment newInstanceCSVImport(
-      ArrayList<CSVRecord> data,
-      int[] fieldToColumnMap,
-      SparseBooleanArrayParcelable discardedRows,
-      QifDateFormat qifDateFormat,
-      long accountId, CurrencyUnit currency, AccountType type) {
-    TaskExecutionFragment f = new TaskExecutionFragment();
-    Bundle bundle = new Bundle();
-    bundle.putInt(KEY_TASKID, TASK_CSV_IMPORT);
-    bundle.putSerializable(CsvImportDataFragment.KEY_DATASET, data);
-    bundle.putSerializable(CsvImportDataFragment.KEY_FIELD_TO_COLUMN, fieldToColumnMap);
-    bundle.putParcelable(CsvImportDataFragment.KEY_DISCARDED_ROWS, discardedRows);
-    bundle.putLong(DatabaseConstants.KEY_ACCOUNTID, accountId);
-    bundle.putSerializable(DatabaseConstants.KEY_CURRENCY, currency);
-    bundle.putSerializable(KEY_DATE_FORMAT, qifDateFormat);
-    bundle.putSerializable(DatabaseConstants.KEY_TYPE, type);
-    f.setArguments(bundle);
-    return f;
-  }
-
   public static TaskExecutionFragment newInstanceWithBundle(@NonNull Bundle b, int taskId) {
     TaskExecutionFragment f = new TaskExecutionFragment<>();
     b.putInt(KEY_TASKID, taskId);
@@ -277,12 +235,6 @@ public class TaskExecutionFragment<T> extends Fragment {
         break;
       case TASK_QIF_IMPORT:
         new QifImportTask(this, args).execute();
-        break;
-      case TASK_CSV_PARSE:
-        new CsvParseTask(this, args).execute();
-        break;
-      case TASK_CSV_IMPORT:
-        new CsvImportTask(this, args).execute();
         break;
       case TASK_EXPORT:
         new ExportTask(this, args).execute();

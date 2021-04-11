@@ -10,7 +10,6 @@ import android.widget.ExpandableListView.ExpandableListContextMenuInfo;
 
 import com.annimon.stream.Exceptional;
 import com.dropbox.core.android.Auth;
-import com.google.android.material.snackbar.Snackbar;
 
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment;
@@ -28,7 +27,6 @@ import org.totschnig.myexpenses.util.Result;
 
 import java.io.Serializable;
 
-import icepick.Icepick;
 import icepick.State;
 
 import static org.totschnig.myexpenses.task.TaskExecutionFragment.TASK_CREATE_SYNC_ACCOUNT;
@@ -52,24 +50,16 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    setTheme(getThemeIdEditDialog());
     super.onCreate(savedInstanceState);
-    Icepick.restoreInstanceState(this, savedInstanceState);
     setContentView(R.layout.manage_sync_backends);
     setupToolbar(true);
     setTitle(R.string.pref_manage_sync_backends_title);
     if (savedInstanceState == null) {
-      if (!ContribFeature.SYNCHRONIZATION.isAvailable(getPrefHandler())) {
+      if (!licenceHandler.hasTrialAccessTo(ContribFeature.SYNCHRONIZATION)) {
         contribFeatureRequested(ContribFeature.SYNCHRONIZATION, null);
       }
       sanityCheck();
     }
-  }
-
-  @Override
-  protected void onSaveInstanceState(Bundle outState) {
-    super.onSaveInstanceState(outState);
-    Icepick.saveInstanceState(this, outState);
   }
 
   @Override
@@ -79,11 +69,11 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
       final String accessToken = Auth.getOAuth2Token();
       if (accessToken != null) {
         AccountManager.get(this).setAuthToken(
-            GenericAccountService.GetAccount(dropBoxTokenRequestPendingForAccount),
-            GenericAccountService.Authenticator.AUTH_TOKEN_TYPE,
+            GenericAccountService.getAccount(dropBoxTokenRequestPendingForAccount),
+            GenericAccountService.AUTH_TOKEN_TYPE,
             accessToken);
       } else {
-        showSnackbar("Dropbox Oauth Token is null", Snackbar.LENGTH_LONG);
+        showSnackbar("Dropbox Oauth Token is null");
       }
       dropBoxTokenRequestPendingForAccount = null;
     } else {
@@ -122,29 +112,25 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
 
   @Override
   public void onPositive(Bundle args) {
-    switch (args.getInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE)) {
-      case R.id.SYNC_UNLINK_COMMAND: {
-        startTaskExecution(TASK_SYNC_UNLINK,
-            new String[]{args.getString(DatabaseConstants.KEY_UUID)}, null, 0);
-        return;
-      }
-      case R.id.SYNC_REMOVE_BACKEND_COMMAND: {
-        startTaskExecution(TASK_SYNC_REMOVE_BACKEND,
-            new String[]{args.getString(DatabaseConstants.KEY_SYNC_ACCOUNT_NAME)}, null, 0);
-        return;
-      }
-      case R.id.SYNC_LINK_COMMAND_LOCAL_DO: {
-        Account account = (Account) args.getSerializable(KEY_ACCOUNT);
-        startTaskExecution(TASK_SYNC_LINK_LOCAL,
-            new String[]{account.uuid}, account.getSyncAccountName(), 0);
-        return;
-      }
-      case R.id.SYNC_LINK_COMMAND_REMOTE_DO: {
-        Account account = (Account) args.getSerializable(KEY_ACCOUNT);
-        startTaskExecution(TASK_SYNC_LINK_REMOTE,
-            null, account, 0);
-        return;
-      }
+    int anInt = args.getInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE);
+    if (anInt == R.id.SYNC_UNLINK_COMMAND) {
+      startTaskExecution(TASK_SYNC_UNLINK,
+          new String[]{args.getString(DatabaseConstants.KEY_UUID)}, null, 0);
+      return;
+    } else if (anInt == R.id.SYNC_REMOVE_BACKEND_COMMAND) {
+      startTaskExecution(TASK_SYNC_REMOVE_BACKEND,
+          new String[]{args.getString(DatabaseConstants.KEY_SYNC_ACCOUNT_NAME)}, null, 0);
+      return;
+    } else if (anInt == R.id.SYNC_LINK_COMMAND_LOCAL_DO) {
+      Account account = (Account) args.getSerializable(KEY_ACCOUNT);
+      startTaskExecution(TASK_SYNC_LINK_LOCAL,
+          new String[]{account.getUuid()}, account.getSyncAccountName(), 0);
+      return;
+    } else if (anInt == R.id.SYNC_LINK_COMMAND_REMOTE_DO) {
+      Account account = (Account) args.getSerializable(KEY_ACCOUNT);
+      startTaskExecution(TASK_SYNC_LINK_REMOTE,
+          null, account, 0);
+      return;
     }
     super.onPositive(args);
   }
@@ -154,33 +140,29 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
     if (super.dispatchCommand(command, tag)) {
       return true;
     }
-    switch (command) {
-      case R.id.SYNC_LINK_COMMAND_LOCAL: {
-        Bundle b = new Bundle();
-        b.putString(ConfirmationDialogFragment.KEY_MESSAGE,
-            getString(R.string.dialog_confirm_sync_link_local));
-        b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE, R.id.SYNC_LINK_COMMAND_LOCAL_DO);
-        b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.dialog_command_sync_link_local);
-        b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, android.R.string.cancel);
-        b.putSerializable(KEY_ACCOUNT, (Account) tag);
-        ConfirmationDialogFragment.newInstance(b).show(getSupportFragmentManager(), "SYNC_LINK_LOCAL");
-        return true;
-      }
-      case R.id.SYNC_LINK_COMMAND_REMOTE: {
-        Bundle b = new Bundle();
-        b.putString(ConfirmationDialogFragment.KEY_MESSAGE,
-            getString(R.string.dialog_confirm_sync_link_remote));
-        b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE, R.id.SYNC_LINK_COMMAND_REMOTE_DO);
-        b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.dialog_command_sync_link_remote);
-        b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, android.R.string.cancel);
-        b.putSerializable(KEY_ACCOUNT, (Account) tag);
-        ConfirmationDialogFragment.newInstance(b).show(getSupportFragmentManager(), "SYNC_LINK_REMOTE");
-        return true;
-      }
-      case R.id.TRY_AGAIN_COMMAND: {
-        sanityCheck();
-        return true;
-      }
+    if (command == R.id.SYNC_LINK_COMMAND_LOCAL) {
+      Bundle b = new Bundle();
+      b.putString(ConfirmationDialogFragment.KEY_MESSAGE,
+          getString(R.string.dialog_confirm_sync_link_local));
+      b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE, R.id.SYNC_LINK_COMMAND_LOCAL_DO);
+      b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.dialog_command_sync_link_local);
+      b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, android.R.string.cancel);
+      b.putSerializable(KEY_ACCOUNT, (Account) tag);
+      ConfirmationDialogFragment.newInstance(b).show(getSupportFragmentManager(), "SYNC_LINK_LOCAL");
+      return true;
+    } else if (command == R.id.SYNC_LINK_COMMAND_REMOTE) {
+      Bundle b = new Bundle();
+      b.putString(ConfirmationDialogFragment.KEY_MESSAGE,
+          getString(R.string.dialog_confirm_sync_link_remote));
+      b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE, R.id.SYNC_LINK_COMMAND_REMOTE_DO);
+      b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.dialog_command_sync_link_remote);
+      b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, android.R.string.cancel);
+      b.putSerializable(KEY_ACCOUNT, (Account) tag);
+      ConfirmationDialogFragment.newInstance(b).show(getSupportFragmentManager(), "SYNC_LINK_REMOTE");
+      return true;
+    } else if (command == R.id.TRY_AGAIN_COMMAND) {
+      sanityCheck();
+      return true;
     }
     return false;
   }
@@ -218,7 +200,7 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
       }
       case TASK_SYNC_LINK_SAVE: {
         Result result = (Result) o;
-        showDismissableSnackbar(result.print(this));
+        showDismissibleSnackbar(result.print(this));
         //fall through
       }
       case TASK_SYNC_UNLINK:
@@ -234,7 +216,7 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
         Result result = (Result) o;
         String resultPrintable = result.print(this);
         if (result.isSuccess()) {
-          showSnackbar(resultPrintable, Snackbar.LENGTH_LONG);
+          showSnackbar(resultPrintable);
         } else {
           Bundle b = new Bundle();
           b.putString(ConfirmationDialogFragment.KEY_MESSAGE, resultPrintable);
@@ -261,18 +243,17 @@ public class ManageSyncBackends extends SyncBackendSetupActivity implements Cont
 
   @Override
   public boolean onContextItemSelected(MenuItem item) {
-    switch (item.getItemId()) {
-      case R.id.SYNC_DOWNLOAD_COMMAND:
-        if (PrefKey.NEW_ACCOUNT_ENABLED.getBoolean(true)) {
-          newAccount = getListFragment().getAccountForSync(
-              ((ExpandableListContextMenuInfo) item.getMenuInfo()).packedPosition);
-          if (newAccount != null) {
-            startDbWriteTask();
-          }
-        } else {
-          contribFeatureRequested(ContribFeature.ACCOUNTS_UNLIMITED, null);
+    if (item.getItemId() == R.id.SYNC_DOWNLOAD_COMMAND) {
+      if (PrefKey.NEW_ACCOUNT_ENABLED.getBoolean(true)) {
+        newAccount = getListFragment().getAccountForSync(
+            ((ExpandableListContextMenuInfo) item.getMenuInfo()).packedPosition);
+        if (newAccount != null) {
+          startDbWriteTask();
         }
-        return true;
+      } else {
+        contribFeatureRequested(ContribFeature.ACCOUNTS_UNLIMITED, null);
+      }
+      return true;
     }
     return super.onContextItemSelected(item);
   }

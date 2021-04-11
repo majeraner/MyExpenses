@@ -8,16 +8,12 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextWatcher;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
-import android.widget.TextView;
 
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
+import org.totschnig.myexpenses.databinding.EditCurrencyBinding;
 import org.totschnig.myexpenses.model.CurrencyContext;
 import org.totschnig.myexpenses.model.CurrencyUnit;
 import org.totschnig.myexpenses.util.Utils;
@@ -36,38 +32,14 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
-import butterknife.BindView;
-import butterknife.ButterKnife;
 
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY;
 import static org.totschnig.myexpenses.util.Utils.isFrameworkCurrency;
 
-public class EditCurrencyDialog extends CommitSafeDialogFragment {
+public class EditCurrencyDialog extends BaseDialogFragment {
+  private EditCurrencyBinding binding;
 
   public static final String KEY_RESULT = "result";
-  @BindView(R.id.edt_currency_symbol)
-  EditText editTextSymbol;
-
-  @BindView(R.id.edt_currency_fraction_digits)
-  EditText editTextFractionDigits;
-
-  @BindView(R.id.edt_currency_code)
-  EditText editTextCode;
-
-  @BindView(R.id.edt_currency_label)
-  EditText editTextLabel;
-
-  @BindView(R.id.container_currency_label)
-  ViewGroup containerLabel;
-
-  @BindView(R.id.container_currency_code)
-  ViewGroup containerCode;
-
-  @BindView(R.id.checkBox)
-  CheckBox checkBox;
-
-  @BindView(R.id.warning_change_fraction_digits)
-  TextView warning;
 
   @Inject
   CurrencyContext currencyContext;
@@ -85,7 +57,7 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
   @Override
   public void onCreate(@Nullable Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    MyApplication.getInstance().getAppComponent().inject(this);
+    ((MyApplication) requireActivity().getApplication()).getAppComponent().inject(this);
     editCurrencyViewModel = new ViewModelProvider(this).get(EditCurrencyViewModel.class);
     editCurrencyViewModel.getUpdateComplete().observe(this, this::dismiss);
     editCurrencyViewModel.getInsertComplete().observe(this, success -> {
@@ -98,33 +70,38 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
     });
   }
 
+  @Override
+  public void onDestroyView() {
+    super.onDestroyView();
+    binding = null;
+  }
+
   @NonNull
   @Override
   public Dialog onCreateDialog(Bundle savedInstanceState) {
-    Activity ctx = getActivity();
-    LayoutInflater li = LayoutInflater.from(ctx);
-    //noinspection InflateParams
-    dialogView = li.inflate(R.layout.edit_currency, null);
-    ButterKnife.bind(this, dialogView);
+    AlertDialog.Builder builder = initBuilderWithBinding(() -> {
+        binding = EditCurrencyBinding.inflate(materialLayoutInflater);
+        return binding;
+    });
     Currency currency = getCurrency();
     boolean frameworkCurrency;
     String title = null;
     if (currency != null) {
-      CurrencyUnit currencyUnit = currencyContext.get(currency.code());
-      editTextSymbol.setText(currencyUnit.symbol());
-      editTextCode.setText(currency.code());
+      CurrencyUnit currencyUnit = currencyContext.get(currency.getCode());
+      binding.edtCurrencySymbol.setText(currencyUnit.getSymbol());
+      binding.edtCurrencyCode.setText(currency.getCode());
 
       final String displayName = currency.toString();
-      frameworkCurrency = isFrameworkCurrency(currency.code());
+      frameworkCurrency = isFrameworkCurrency(currency.getCode());
       if (frameworkCurrency) {
-        editTextSymbol.requestFocus();
-        title = String.format(Locale.ROOT, "%s (%s)", displayName, currency.code());
-        containerLabel.setVisibility(View.GONE);
-        containerCode.setVisibility(View.GONE);
+        binding.edtCurrencySymbol.requestFocus();
+        title = String.format(Locale.ROOT, "%s (%s)", displayName, currency.getCode());
+        binding.containerCurrencyLabel.setVisibility(View.GONE);
+        binding.containerCurrencyCode.setVisibility(View.GONE);
       } else {
-        editTextLabel.setText(displayName);
+        binding.edtCurrencyLabel.setText(displayName);
       }
-      editTextFractionDigits.addTextChangedListener(new TextWatcher() {
+      binding.edtCurrencyFractionDigits.addTextChangedListener(new TextWatcher() {
         @Override
         public void beforeTextChanged(CharSequence s, int start, int count, int after) {
 
@@ -140,8 +117,8 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
           final int newValue = readFractionDigitsFromUI();
           final int oldValue = currentFractionDigits();
           final boolean valueUpdate = newValue != -1 && newValue != oldValue;
-          checkBox.setVisibility(valueUpdate ? View.VISIBLE : View.GONE);
-          warning.setVisibility(valueUpdate ? View.VISIBLE : View.GONE);
+          binding.checkBox.setVisibility(valueUpdate ? View.VISIBLE : View.GONE);
+          binding.warningChangeFractionDigits.setVisibility(valueUpdate ? View.VISIBLE : View.GONE);
           if (valueUpdate) {
             String message = getString(R.string.warning_change_fraction_digits_1);
             int delta = oldValue - newValue;
@@ -152,20 +129,19 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
             if (delta > 0) {
               message += " " + getString(R.string.warning_change_fraction_digits_3);
             }
-            warning.setText(message);
+            binding.warningChangeFractionDigits.setText(message);
           }
         }
       });
     } else {
       title = getString(R.string.dialog_title_new_currency);
-      editTextCode.setFocusable(true);
-      editTextCode.setFocusableInTouchMode(true);
-      editTextCode.setEnabled(true);
-      editTextCode.setFilters(new InputFilter[] {new InputFilter.AllCaps(), new InputFilter.LengthFilter(3)});
+      binding.edtCurrencyCode.setFocusable(true);
+      binding.edtCurrencyCode.setFocusableInTouchMode(true);
+      binding.edtCurrencyCode.setEnabled(true);
+      binding.edtCurrencyCode.setFilters(new InputFilter[] {new InputFilter.AllCaps(), new InputFilter.LengthFilter(3)});
     }
-    editTextFractionDigits.setText(String.valueOf(currentFractionDigits()));
-    final AlertDialog alertDialog = new AlertDialog.Builder(ctx)
-        .setView(dialogView)
+    binding.edtCurrencyFractionDigits.setText(String.valueOf(currentFractionDigits()));
+    final AlertDialog alertDialog = builder
         .setNegativeButton(android.R.string.cancel, null)
         .setPositiveButton(android.R.string.ok, null)
         .setTitle(title)
@@ -177,29 +153,29 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
     return alertDialog;
   }
 
-  private String readSymbolfromUI() {
-    return editTextSymbol.getText().toString();
+  private String readSymbolFromUI() {
+    return binding.edtCurrencySymbol.getText().toString();
   }
 
-  private String readLabelfromUI() {
-    return editTextLabel.getText().toString();
+  private String readLabelFromUI() {
+    return binding.edtCurrencyLabel.getText().toString();
   }
 
-  private String readCodefromUI() {
-    return editTextCode.getText().toString();
+  private String readCodeFromUI() {
+    return binding.edtCurrencyCode.getText().toString();
   }
 
   private int currentFractionDigits() {
     final Currency currency = getCurrency();
     if (currency != null) {
-      return currencyContext.get(currency.code()).fractionDigits();
+      return currencyContext.get(currency.getCode()).getFractionDigits();
     }
     return 2;
   }
 
   private int readFractionDigitsFromUI() {
     try {
-      return Integer.parseInt(editTextFractionDigits.getText().toString());
+      return Integer.parseInt(binding.edtCurrencyFractionDigits.getText().toString());
     } catch (NumberFormatException e) {
       return -1;
     }
@@ -213,23 +189,23 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
   private void onOkClick(View view) {
     final Currency currency = getCurrency();
     FormValidator validator = new FormValidator();
-    validator.add(new FormFieldNotEmptyValidator(editTextSymbol));
-    validator.add(new NumberRangeValidator(editTextFractionDigits, 0, 8));
+    validator.add(new FormFieldNotEmptyValidator(binding.edtCurrencySymbol));
+    validator.add(new NumberRangeValidator(binding.edtCurrencyFractionDigits, 0, 8));
     if (currency == null) {
-      validator.add(new FormFieldNotEmptyValidator(editTextCode));
-      validator.add(new FormFieldNotEmptyValidator(editTextLabel));
+      validator.add(new FormFieldNotEmptyValidator(binding.edtCurrencyCode));
+      validator.add(new FormFieldNotEmptyValidator(binding.edtCurrencyLabel));
     }
     if (validator.validate()) {
-      final boolean withUpdate = checkBox.isChecked();
-      String label = readLabelfromUI();
-      final String symbol = readSymbolfromUI();
+      final boolean withUpdate = binding.checkBox.isChecked();
+      String label = readLabelFromUI();
+      final String symbol = readSymbolFromUI();
       final int fractionDigits = readFractionDigitsFromUI();
       if (currency == null) {
-        editCurrencyViewModel.newCurrency(readCodefromUI(), symbol, fractionDigits, label);
+        editCurrencyViewModel.newCurrency(readCodeFromUI(), symbol, fractionDigits, label);
         setButtonState(false);
       } else {
-        final boolean frameworkCurrency = isFrameworkCurrency(currency.code());
-        editCurrencyViewModel.save(currency.code(), symbol, fractionDigits, frameworkCurrency ? null : label, withUpdate);
+        final boolean frameworkCurrency = isFrameworkCurrency(currency.getCode());
+        editCurrencyViewModel.save(currency.getCode(), symbol, fractionDigits, frameworkCurrency ? null : label, withUpdate);
         if (!withUpdate && frameworkCurrency) {
           dismiss();
         } else {
@@ -250,7 +226,7 @@ public class EditCurrencyDialog extends CommitSafeDialogFragment {
       if (result != null) {
         data = new Intent();
         data.putExtra(KEY_RESULT, result.intValue());
-        data.putExtra(KEY_CURRENCY, getCurrency().code());
+        data.putExtra(KEY_CURRENCY, getCurrency().getCode());
       }
       targetFragment.onActivityResult(getTargetRequestCode(), Activity.RESULT_OK, data);
     }

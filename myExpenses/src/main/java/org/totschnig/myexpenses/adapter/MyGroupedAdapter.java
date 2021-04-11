@@ -15,6 +15,7 @@ import com.github.lzyzsd.circleprogress.DonutProgress;
 
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
+import org.totschnig.myexpenses.databinding.AccountsHeaderBinding;
 import org.totschnig.myexpenses.model.AccountGrouping;
 import org.totschnig.myexpenses.model.AccountType;
 import org.totschnig.myexpenses.model.AggregateAccount;
@@ -53,26 +54,26 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_SUM_TRANSF
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TOTAL;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TYPE;
 import static org.totschnig.myexpenses.util.ColorUtils.createBackgroundColorDrawable;
-import static org.totschnig.myexpenses.util.ColorUtils.getContrastColor;
+import static org.totschnig.myexpenses.util.ColorUtils.getComplementColor;
 
 public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyListHeadersAdapter {
   private final static String EXPANSION_PREF_PREFIX = "ACCOUNT_EXPANSION_";
 
   private final CurrencyFormatter currencyFormatter;
   private AccountGrouping grouping;
-  private LayoutInflater inflater;
-  private ProtectedFragmentActivity activity;
-  private PrefHandler prefHandler;
-  private CurrencyContext currencyContext;
+  private final LayoutInflater inflater;
+  private final PrefHandler prefHandler;
+  private final CurrencyContext currencyContext;
+  private final Context context;
 
   public MyGroupedAdapter(ProtectedFragmentActivity context, Cursor c,
                           CurrencyFormatter currencyFormatter, PrefHandler prefHandler, CurrencyContext currencyContext) {
     super(context, R.layout.account_row_ng, c, 0);
     inflater = LayoutInflater.from(context);
     this.currencyFormatter = currencyFormatter;
-    this.activity = context;
     this.prefHandler = prefHandler;
     this.currencyContext = currencyContext;
+    this.context = context;
   }
 
   public void setGrouping(AccountGrouping grouping) {
@@ -83,8 +84,9 @@ public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyLis
   public View getHeaderView(int position, View convertView, ViewGroup parent) {
     HeaderViewHolder holder;
     if (convertView == null) {
-      convertView = inflater.inflate(R.layout.accounts_header, parent, false);
-      holder = new HeaderViewHolder(convertView);
+      AccountsHeaderBinding binding = AccountsHeaderBinding.inflate(inflater, parent, false);
+      convertView = binding.getRoot();
+      holder = new HeaderViewHolder(binding);
       convertView.setTag(holder);
     } else {
       holder = (HeaderViewHolder) convertView.getTag();
@@ -94,14 +96,14 @@ public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyLis
     long headerId = getHeaderId(position);
     String headerText = null;
     if (headerId == Long.MAX_VALUE) {
-      headerText = activity.getString(R.string.menu_aggregates);
+      headerText = context.getString(R.string.menu_aggregates);
     } else {
       switch (grouping) {
         case CURRENCY:
-          headerText = Currency.create(c.getString(c.getColumnIndex(KEY_CURRENCY))).toString();
+          headerText = Currency.Companion.create(c.getString(c.getColumnIndex(KEY_CURRENCY)), context).toString();
           break;
         case NONE:
-          headerText = activity.getString(headerId == 0 ? R.string.pref_manage_accounts_title : R.string.menu_aggregates);
+          headerText = context.getString(headerId == 0 ? R.string.pref_manage_accounts_title : R.string.menu_aggregates);
           break;
         case TYPE:
           int headerRes;
@@ -110,11 +112,11 @@ public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyLis
           } else {
             headerRes = AccountType.values()[(int) headerId].toStringResPlural();
           }
-          headerText = activity.getString(headerRes);
+          headerText = context.getString(headerRes);
           break;
       }
     }
-    holder.sectionLabel.setText(headerText);
+    holder.binding.sectionLabel.setText(headerText);
     return convertView;
   }
 
@@ -178,9 +180,9 @@ public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyLis
       } else {
         holder.label.setText(label);
       }
-      colorInt = activity.getColorAggregate();
+      colorInt = context.getResources().getColor(R.color.colorAggregate);
       expansionPrefKey = String.format(Locale.ROOT, "%s%s", EXPANSION_PREF_PREFIX,
-          isHome ? AggregateAccount.AGGREGATE_HOME_CURRENCY_CODE : currency.code());
+          isHome ? AggregateAccount.AGGREGATE_HOME_CURRENCY_CODE : currency.getCode());
       holder.colorAccount.setImageResource(R.drawable.ic_action_equal_white);
     } else {
       holder.label.setText(label);
@@ -206,7 +208,7 @@ public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyLis
       }
       UiUtils.configureProgress(holder.criterionProgress, progress);
       holder.criterionProgress.setFinishedStrokeColor(colorInt);
-      holder.criterionProgress.setUnfinishedStrokeColor(getContrastColor(colorInt));
+      holder.criterionProgress.setUnfinishedStrokeColor(getComplementColor(colorInt));
       holder.criterionLabel.setText(criterion > 0 ? R.string.saving_goal : R.string.credit_limit);
       setConvertedAmount(currency, criterion, isHome, holder.criterion);
     } else {
@@ -276,15 +278,15 @@ public class MyGroupedAdapter extends ResourceCursorAdapter implements StickyLis
     }
   }
 
-  class HeaderViewHolder {
-    @BindView(R.id.sectionLabel) TextView sectionLabel;
+  static class HeaderViewHolder {
+    AccountsHeaderBinding binding;
 
-    HeaderViewHolder(View view) {
-      ButterKnife.bind(this, view);
+    HeaderViewHolder(AccountsHeaderBinding binding) {
+      this.binding = binding;
     }
   }
 
-  class ViewHolder {
+  static class ViewHolder {
     @BindView(R.id.expansionPanel) ExpansionPanel expansionPanel;
     @BindView(R.id.colorAccount) ImageView colorAccount;
     @BindView(R.id.criterion_progress) DonutProgress criterionProgress;

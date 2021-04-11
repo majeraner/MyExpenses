@@ -1,62 +1,55 @@
 package org.totschnig.myexpenses.di
 
-import android.app.Activity
-import android.app.Application
 import android.content.Context
+import androidx.fragment.app.FragmentActivity
 import dagger.Module
 import dagger.Provides
 import org.totschnig.myexpenses.MyApplication
 import org.totschnig.myexpenses.activity.ImageViewIntentProvider
 import org.totschnig.myexpenses.activity.SystemImageViewIntentProvider
+import org.totschnig.myexpenses.dialog.RemindRateDialogFragment
 import org.totschnig.myexpenses.preference.PrefHandler
+import org.totschnig.myexpenses.ui.DiscoveryHelper
+import org.totschnig.myexpenses.ui.IDiscoveryHelper
 import org.totschnig.myexpenses.util.ads.AdHandlerFactory
-import org.totschnig.myexpenses.util.ads.DefaultAdHandlerFactory
-import org.totschnig.myexpenses.util.locale.Callback
-import org.totschnig.myexpenses.util.locale.LocaleManager
-import org.totschnig.myexpenses.util.locale.UserLocaleProvider
+import org.totschnig.myexpenses.util.distrib.ReviewManager
+import org.totschnig.myexpenses.util.licence.LicenceHandler
 import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
-class UiModule {
+open class UiModule {
     @Provides
     @Singleton
     fun provideImageViewIntentProvider(): ImageViewIntentProvider = SystemImageViewIntentProvider()
 
     @Provides
     @Singleton
-    fun provideAdHandlerFactory(application: MyApplication?, prefHandler: PrefHandler?, @Named(AppComponent.USER_COUNTRY) userCountry: String?): AdHandlerFactory = object : DefaultAdHandlerFactory(application, prefHandler, userCountry) {
-        override fun isAdDisabled() = true
+    fun provideAdHandlerFactory(application: MyApplication, prefHandler: PrefHandler, @Named(AppComponent.USER_COUNTRY) userCountry: String, licenceHandler: LicenceHandler): AdHandlerFactory =
+           try {
+               Class.forName("org.totschnig.myexpenses.util.ads.PlatformAdHandlerFactory")
+                       .getConstructor(Context::class.java, PrefHandler::class.java, String::class.java, LicenceHandler::class.java)
+                       .newInstance(application, prefHandler, userCountry, licenceHandler) as AdHandlerFactory
+           } catch (e: Exception) {
+               object : AdHandlerFactory {}
     }
 
     @Provides
     @Singleton
-    fun provideLanguageManager(localeProvider: UserLocaleProvider): LocaleManager = try {
-        Class.forName("org.totschnig.myexpenses.util.locale.PlatformLocaleManager")
-                .getConstructor(UserLocaleProvider::class.java)
-                .newInstance(localeProvider) as LocaleManager
+    open fun provideDiscoveryHelper(prefHandler: PrefHandler): IDiscoveryHelper = DiscoveryHelper(prefHandler)
+
+    @Provides
+    @Singleton
+    open fun provideReviewManager(prefHandler: PrefHandler): ReviewManager = try {
+        Class.forName("org.totschnig.myexpenses.util.distrib.PlatformReviewManager")
+                .getConstructor(PrefHandler::class.java)
+                .newInstance(prefHandler) as ReviewManager
     } catch (e: Exception) {
-        object : LocaleManager {
-            var callback: Callback? = null
-            override fun initApplication(application: Application) {
-                //noop
-            }
-
-            override fun initActivity(activity: Activity) {
-                //noop
-            }
-
-            override fun requestLocale(context: Context) {
-                callback?.onAvailable()
-            }
-
-            override fun onResume(callback: Callback) {
-                this.callback = callback
-            }
-
-            override fun onPause() {
-                this.callback = null
+        object : ReviewManager {
+            override fun onEditTransactionResult(activity: FragmentActivity) {
+                RemindRateDialogFragment.maybeShow(prefHandler, activity)
             }
         }
     }
+
 }

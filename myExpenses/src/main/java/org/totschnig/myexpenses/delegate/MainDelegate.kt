@@ -9,6 +9,7 @@ import android.widget.SimpleCursorAdapter
 import androidx.fragment.app.FragmentActivity
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.databinding.DateEditBinding
+import org.totschnig.myexpenses.databinding.MethodRowBinding
 import org.totschnig.myexpenses.databinding.OneExpenseBinding
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment
 import org.totschnig.myexpenses.model.CurrencyContext
@@ -24,28 +25,27 @@ import org.totschnig.myexpenses.util.Utils
 import org.totschnig.myexpenses.viewmodel.data.Account
 
 //Transaction or Split
-abstract class MainDelegate<T : ITransaction>(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, prefHandler: PrefHandler, isTemplate: Boolean) : TransactionDelegate<T>(viewBinding, dateEditBinding, prefHandler, isTemplate) {
+abstract class MainDelegate<T : ITransaction>(viewBinding: OneExpenseBinding, dateEditBinding: DateEditBinding, methodRowBinding: MethodRowBinding, prefHandler: PrefHandler, isTemplate: Boolean) : TransactionDelegate<T>(viewBinding, dateEditBinding, methodRowBinding, prefHandler, isTemplate) {
     private lateinit var payeeAdapter: SimpleCursorAdapter
 
     override fun buildTransaction(forSave: Boolean, currencyContext: CurrencyContext, accountId: Long): T? {
         val amount = validateAmountInput(forSave)
-        if (amount == null) { //Snackbar is shown in validateAmountInput
-            return null
-        }
+                ?: //Snackbar is shown in validateAmountInput
+                return null
         return buildMainTransaction(accountId).apply {
             this.amount = Money(currentAccount()!!.currency, amount)
             payee = viewBinding.Payee.text.toString()
             this.methodId = this@MainDelegate.methodId
-            val originalAmount = validateAmountInput(viewBinding.OriginalAmount, false, true)
+            val originalAmount = validateAmountInput(viewBinding.OriginalAmount, showToUser = false, ifPresent = true)
             val selectedItem = viewBinding.OriginalAmount.selectedCurrency
             if (selectedItem != null && originalAmount != null) {
-                val currency = selectedItem.code()
+                val currency = selectedItem.code
                 PrefKey.LAST_ORIGINAL_CURRENCY.putString(currency)
                 this.originalAmount = Money(currencyContext[currency], originalAmount)
             } else {
                 this.originalAmount = null
             }
-            val equivalentAmount = validateAmountInput(viewBinding.EquivalentAmount, false, true)
+            val equivalentAmount = validateAmountInput(viewBinding.EquivalentAmount, showToUser = false, ifPresent = true)
             this.equivalentAmount = if (equivalentAmount == null) null else Money(Utils.getHomeCurrency(), if (isIncome) equivalentAmount else equivalentAmount.negate())
         }
     }
@@ -82,7 +82,7 @@ abstract class MainDelegate<T : ITransaction>(viewBinding: OneExpenseBinding, da
             var selectArgs = arrayOfNulls<String>(0)
             if (constraint != null) {
                 selection = Payee.SELECTION
-                selectArgs = Payee.SELECTION_ARGS(Utils.esacapeSqlLikeExpression(Utils.normalize(constraint.toString())))
+                selectArgs = Payee.SELECTION_ARGS(Utils.escapeSqlLikeExpression(Utils.normalize(constraint.toString())))
             }
             context.contentResolver.query(
                     TransactionProvider.PAYEES_URI, arrayOf(DatabaseConstants.KEY_ROWID, DatabaseConstants.KEY_PAYEE_NAME),
@@ -107,8 +107,8 @@ abstract class MainDelegate<T : ITransaction>(viewBinding: OneExpenseBinding, da
                             b.putInt(ConfirmationDialogFragment.KEY_COMMAND_NEGATIVE, R.id.AUTO_FILL_COMMAND)
                             b.putString(ConfirmationDialogFragment.KEY_PREFKEY,
                                     prefHandler.getKey(PrefKey.AUTO_FILL_HINT_SHOWN))
-                            b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.yes)
-                            b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, R.string.no)
+                            b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.response_yes)
+                            b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, R.string.response_no)
                             ConfirmationDialogFragment.newInstance(b).show((context as FragmentActivity).supportFragmentManager,
                                     "AUTO_FILL_HINT")
                         }

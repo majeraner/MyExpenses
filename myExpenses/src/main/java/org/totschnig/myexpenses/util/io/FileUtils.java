@@ -32,6 +32,8 @@ import android.provider.MediaStore;
 import android.webkit.MimeTypeMap;
 
 import org.totschnig.myexpenses.BuildConfig;
+import org.totschnig.myexpenses.util.AppDirHelper;
+import org.totschnig.myexpenses.util.PictureDirHelper;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
 
 import java.io.File;
@@ -280,7 +282,7 @@ public class FileUtils {
         final Uri contentUri;
         try {
           contentUri = ContentUris.withAppendedId(
-              Uri.parse("content://downloads/public_downloads"), Long.valueOf(docId));
+              Uri.parse("content://downloads/public_downloads"), Long.parseLong(docId));
           dataColumn = getDataColumn(context, contentUri, null, null);
         } catch (NumberFormatException e) {
           final String[] split = docId.split(":");
@@ -314,6 +316,10 @@ public class FileUtils {
     }
     // MediaStore (and general)
     else if ("content".equalsIgnoreCase(uri.getScheme())) {
+
+      if(AppDirHelper.getFileProviderAuthority().equals(uri.getAuthority())) {
+        return PictureDirHelper.getFileForUri(uri).getPath();
+      }
 
       // Return the remote address
       if (isGooglePhotosUri(uri))
@@ -426,9 +432,7 @@ public class FileUtils {
     Bitmap bm = null;
     if (uri != null) {
       final ContentResolver resolver = context.getContentResolver();
-      Cursor cursor = null;
-      try {
-        cursor = resolver.query(uri, null, null, null, null);
+      try (Cursor cursor = resolver.query(uri, null, null, null, null)) {
         if (cursor.moveToFirst()) {
           final int id = cursor.getInt(0);
           Timber.d("Got thumb ID: %d", id);
@@ -449,70 +453,8 @@ public class FileUtils {
         }
       } catch (Exception e) {
         Timber.e(e, "getThumbnail");
-      } finally {
-        if (cursor != null)
-          cursor.close();
       }
     }
     return bm;
   }
-
-//  /**
-//   * File and folder comparator. TODO Expose sorting option method
-//   *
-//   * @author paulburke
-//   */
-//  public static Comparator<File> sComparator = new Comparator<File>() {
-//    @Override
-//    public int compare(File f1, File f2) {
-//      // Sort alphabetically by lower case, which is much cleaner
-//      return f1.getName().toLowerCase().compareTo(
-//          f2.getName().toLowerCase());
-//    }
-//  };
-//
-//  /**
-//   * File (not directories) filter.
-//   *
-//   * @author paulburke
-//   */
-//  public static FileFilter sFileFilter = new FileFilter() {
-//    @Override
-//    public boolean accept(File file) {
-//      final String fileName = file.getName();
-//      // Return files only (not directories) and skip hidden files
-//      return file.isFile() && !fileName.startsWith(HIDDEN_PREFIX);
-//    }
-//  };
-//
-//  /**
-//   * Folder (directories) filter.
-//   *
-//   * @author paulburke
-//   */
-//  public static FileFilter sDirFilter = new FileFilter() {
-//    @Override
-//    public boolean accept(File file) {
-//      final String fileName = file.getName();
-//      // Return directories only and skip hidden directories
-//      return file.isDirectory() && !fileName.startsWith(HIDDEN_PREFIX);
-//    }
-//  };
-//
-//  /**
-//   * Get the Intent for selecting content to be used in an Intent Chooser.
-//   *
-//   * @return The intent for opening a file with Intent.createChooser()
-//   * @author paulburke
-//   */
-//  public static Intent createGetContentIntent() {
-//    // Implicitly allow the user to select a particular kind of data
-//    final Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-//    // The MIME data type filter
-//    intent.setType("*/*");
-//    // Only return URIs that can be opened with ContentResolver
-//    intent.addCategory(Intent.CATEGORY_OPENABLE);
-//    return intent;
-//  }
-
 }

@@ -15,6 +15,8 @@ import org.totschnig.myexpenses.provider.TransactionProvider;
 
 import java.util.List;
 
+import androidx.annotation.NonNull;
+
 import static org.totschnig.myexpenses.task.TaskExecutionFragment.TASK_SET_ACCOUNT_HIDDEN;
 
 public class SelectHiddenAccountDialogFragment extends SelectMultipleDialogFragment {
@@ -32,11 +34,13 @@ public class SelectHiddenAccountDialogFragment extends SelectMultipleDialogFragm
     return R.string.menu_hidden_accounts;
   }
 
+  @NonNull
   @Override
   Uri getUri() {
     return TransactionProvider.ACCOUNTS_URI;
   }
 
+  @NonNull
   @Override
   String getColumn() {
     return DatabaseConstants.KEY_LABEL;
@@ -62,7 +66,7 @@ public class SelectHiddenAccountDialogFragment extends SelectMultipleDialogFragm
               new MessageDialogFragment.Button(R.string.menu_delete, R.id.DELETE_ACCOUNT_COMMAND_DO,
                   ArrayUtils.toObject(itemIds)),
               null,
-              MessageDialogFragment.Button.noButton(), 0)
+              MessageDialogFragment.noButton(), 0)
               .show(getChildFragmentManager(), "DELETE_ACCOUNTS");
           return false;
         }

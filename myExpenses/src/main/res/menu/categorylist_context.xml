@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   This file is part of My Expenses.
   My Expenses is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -15,29 +14,23 @@
   along with My Expenses.  If not, see <http://www.gnu.org/licenses/>.
  -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
-      xmlns:tools="http://schemas.android.com/tools"
-      tools:ignore="AppCompatResource,UnusedAttribute,AlwaysShowAction">
+    xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@id/MOVE_COMMAND"
         android:icon="@drawable/ic_menu_move"
         android:orderInCategory="50"
-        android:showAsAction="always"
-        android:title="@string/menu_move">
-    </item>
-    <group android:id="@id/MenuSingleGroup">
-        <item
-            android:id="@id/CREATE_COMMAND"
-            android:icon="@drawable/ic_menu_add"
-            android:orderInCategory="1"
-            android:showAsAction="always"
-            android:title="@string/menu_create_sub_cat">
-        </item>
-        <item
-            android:id="@id/COLOR_COMMAND"
-            android:icon="@drawable/ic_color"
-            android:orderInCategory="0"
-            android:showAsAction="always"
-            android:title="@string/menu_color">
-        </item>
-    </group>
+        android:title="@string/menu_move"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@id/CREATE_SUB_COMMAND"
+        android:icon="@drawable/ic_menu_add"
+        android:orderInCategory="2"
+        android:title="@string/menu_create_sub_cat"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@id/COLOR_COMMAND"
+        android:icon="@drawable/ic_color"
+        android:orderInCategory="3"
+        android:title="@string/menu_color"
+        app:showAsAction="ifRoom" />
 </menu>

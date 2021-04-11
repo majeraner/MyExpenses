@@ -17,7 +17,6 @@ import android.os.RemoteException;
 import android.text.TextUtils;
 
 import com.android.calendar.CalendarContractCompat.Calendars;
-import com.annimon.stream.Collectors;
 
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
@@ -47,6 +46,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -110,7 +111,7 @@ public class RestoreTask extends AsyncTask<Void, Result, Result> {
       SyncBackendProvider syncBackendProvider;
       boolean isEncrypted;
       if (syncAccountName != null) {
-        android.accounts.Account account = GenericAccountService.GetAccount(syncAccountName);
+        android.accounts.Account account = GenericAccountService.getAccount(syncAccountName);
         try {
           syncBackendProvider = SyncBackendProviderFactory.get(MyApplication.getInstance(), account, false)
               .getOrThrow();
@@ -153,7 +154,11 @@ public class RestoreTask extends AsyncTask<Void, Result, Result> {
 
       }
     } catch (FileNotFoundException | SecurityException | GeneralSecurityException e) {
-      CrashHandler.report(e, String.format("fileUri %s, syncAccountName %s, backupFromSync %s", fileUri, syncAccountName, backupFromSync));
+      Map<String, String> customData = new HashMap<>();
+      customData.put("fileUri", fileUri != null ? fileUri.toString() : "null");
+      customData.put("syncAccountName", syncAccountName);
+      customData.put("backupFromSync", backupFromSync);
+      CrashHandler.report(e, customData);
       return Result.ofFailure(
           R.string.parse_error_other_exception,
           e.getMessage());
@@ -359,7 +364,7 @@ public class RestoreTask extends AsyncTask<Void, Result, Result> {
           Uri restored = null;
           if (backupImage.exists()) {
             File restoredImage = PictureDirHelper.getOutputMediaFile(
-                fileName.substring(0, fileName.lastIndexOf('.')), false, application.isProtected());
+                fileName.substring(0, fileName.lastIndexOf('.')), false, true);
             if (restoredImage == null || !FileCopyUtils.copy(backupImage, restoredImage)) {
               CrashHandler.report(String.format("Could not restore file %s from backup", fromBackup.toString()));
             } else {
@@ -404,9 +409,7 @@ public class RestoreTask extends AsyncTask<Void, Result, Result> {
     Result result = null;
     MyApplication application = MyApplication.getInstance();
     AccountManager accountManager = AccountManager.get(application);
-    List<String> accounts = GenericAccountService.getAccountsAsStream(application)
-        .map(account -> account.name)
-        .collect(Collectors.toList());
+    List<String> accounts = Arrays.asList(GenericAccountService.getAccountNames(application));
     ContentResolver cr = application.getContentResolver();
     String[] projection = {KEY_ROWID, KEY_SYNC_ACCOUNT_NAME};
     Cursor cursor = cr.query(TransactionProvider.ACCOUNTS_URI, projection,
@@ -421,8 +424,8 @@ public class RestoreTask extends AsyncTask<Void, Result, Result> {
           String accountName = cursor.getString(1);
           String localKey = SyncAdapter.KEY_LAST_SYNCED_LOCAL(accountId);
           String remoteKey = SyncAdapter.KEY_LAST_SYNCED_REMOTE(accountId);
-          if (accounts.indexOf(accountName) > -1) {
-            android.accounts.Account account = GenericAccountService.GetAccount(accountName);
+          if (accounts.contains(accountName)) {
+            android.accounts.Account account = GenericAccountService.getAccount(accountName);
             accountManager.setUserData(account, localKey, sharedPreferences.getString(localKey, null));
             accountManager.setUserData(account, remoteKey, sharedPreferences.getString(remoteKey, null));
             restored++;

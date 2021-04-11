@@ -1,29 +1,25 @@
 package org.totschnig.myexpenses.widget
 
-import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.database.Cursor
+import android.database.sqlite.SQLiteException
 import android.os.Binder
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.provider.DatabaseConstants
-import org.totschnig.myexpenses.provider.TransactionProvider
 import org.totschnig.myexpenses.util.UiUtils
-import timber.log.Timber
+import org.totschnig.myexpenses.util.crashreporting.CrashHandler
 
 abstract class AbstractRemoteViewsFactory(
         private val context: Context,
         intent: Intent
 ) : RemoteViewsService.RemoteViewsFactory {
-    protected val appWidgetId: Int
     protected var cursor: Cursor? = null
     protected val width: Int
 
     init {
-        appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
-                AppWidgetManager.INVALID_APPWIDGET_ID)
         width = intent.getIntExtra(KEY_WIDTH, 0).takeIf { it > 0 } ?: Int.MAX_VALUE
     }
 
@@ -47,21 +43,22 @@ abstract class AbstractRemoteViewsFactory(
     }
 
     override fun onDataSetChanged() {
-        Timber.w("onDataSetchanged")
         cursor?.close()
-        val builder = TransactionProvider.ACCOUNTS_URI.buildUpon()
-        builder.appendQueryParameter(TransactionProvider.QUERY_PARAMETER_MERGE_CURRENCY_AGGREGATES, "1")
-        val token = Binder.clearCallingIdentity();
+        val token = Binder.clearCallingIdentity()
         try {
-            cursor = buildCursor()
+            try {
+                cursor = buildCursor()
+            } catch (e: SQLiteException) {
+                CrashHandler.report(e)
+            }
         } finally {
-            Binder.restoreCallingIdentity(token);
+            Binder.restoreCallingIdentity(token)
         }
     }
 
     abstract fun buildCursor(): Cursor?
 
-    override fun getViewAt(position: Int) = RemoteViews(context.getPackageName(), R.layout.widget_row).apply {
+    override fun getViewAt(position: Int) = RemoteViews(context.packageName, R.layout.widget_row).apply {
         cursor?.let {
             it.moveToPosition(position)
             populate(it)
@@ -75,7 +72,7 @@ abstract class AbstractRemoteViewsFactory(
     //http://stackoverflow.com/a/35633411/1199911
     protected fun RemoteViews.setImageViewVectorDrawable(viewId: Int, resId: Int) {
         setImageViewBitmap(viewId, UiUtils.getTintedBitmapForTheme(context, resId,
-                R.style.ThemeDark))
+                R.style.DarkBackground))
     }
 
     abstract fun RemoteViews.populate(cursor: Cursor)

@@ -19,7 +19,6 @@ import org.totschnig.myexpenses.model.Sort
 import org.totschnig.myexpenses.model.Sort.Companion.preferredOrderByForTemplates
 import org.totschnig.myexpenses.model.Transfer
 import org.totschnig.myexpenses.preference.PrefHandler
-import org.totschnig.myexpenses.preference.PrefKey
 import org.totschnig.myexpenses.provider.DatabaseConstants
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_COLOR
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CURRENCY
@@ -29,7 +28,6 @@ import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID
 import org.totschnig.myexpenses.provider.DatabaseConstants.KEY_SEALED
 import org.totschnig.myexpenses.provider.DbUtils
 import org.totschnig.myexpenses.provider.TransactionProvider
-import org.totschnig.myexpenses.util.CurrencyFormatter
 import java.util.*
 import javax.inject.Inject
 
@@ -53,16 +51,16 @@ class TemplatetRemoteViewsFactory(
     }
 
     override fun buildCursor(): Cursor? {
-        return context.getContentResolver().query(
+        return context.contentResolver.query(
                 TransactionProvider.TEMPLATES_URI, null, String.format(Locale.ROOT, "%s is null AND %s is null AND %s = 0",
                 KEY_PLANID, KEY_PARENTID, KEY_SEALED),
-                null, preferredOrderByForTemplates(PrefKey.SORT_ORDER_TEMPLATES, prefHandler, Sort.TITLE))
+                null, preferredOrderByForTemplates(prefHandler, Sort.TITLE))
     }
 
     override fun RemoteViews.populate(cursor: Cursor) {
         setBackgroundColorSave(R.id.divider3, cursor.getInt(cursor.getColumnIndex(KEY_COLOR)))
         val title = DbUtils.getString(cursor, DatabaseConstants.KEY_TITLE)
-        val currencyContext = MyApplication.getInstance().getAppComponent().currencyContext()
+        val currencyContext = MyApplication.getInstance().appComponent.currencyContext()
         val currency = currencyContext.get(DbUtils.getString(cursor, KEY_CURRENCY))
         val amount = Money(currency, DbUtils.getLongOr0L(cursor, DatabaseConstants.KEY_AMOUNT))
         val isTransfer = !(cursor.isNull(cursor.getColumnIndexOrThrow(DatabaseConstants.KEY_TRANSFER_ACCOUNT)))
@@ -72,9 +70,9 @@ class TemplatetRemoteViewsFactory(
         setTextViewText(R.id.line1,
                 title + " : " + (context.applicationContext as MyApplication).appComponent.currencyFormatter().formatCurrency(amount))
         val commentSeparator = " / "
-        val description = SpannableStringBuilder(if (isTransfer) Transfer.getIndicatorPrefixForLabel(amount.getAmountMinor()) + label else label)
+        val description = SpannableStringBuilder(if (isTransfer) Transfer.getIndicatorPrefixForLabel(amount.amountMinor) + label else label)
         if (!TextUtils.isEmpty(comment)) {
-            if (description.length != 0) {
+            if (description.isNotEmpty()) {
                 description.append(commentSeparator)
             }
             description.append(comment)
@@ -83,7 +81,7 @@ class TemplatetRemoteViewsFactory(
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         if (!TextUtils.isEmpty(payee)) {
-            if (description.length != 0) {
+            if (description.isNotEmpty()) {
                 description.append(commentSeparator)
             }
             description.append(payee)
@@ -99,7 +97,7 @@ class TemplatetRemoteViewsFactory(
         setViewVisibility(R.id.command3, View.GONE)
     }
 
-    protected fun RemoteViews.configureButton(buttonId: Int, drawableResId: Int, action: String, contentDescriptionResId: Int, templateId: Long, minimumWidth: Int) {
+    private fun RemoteViews.configureButton(buttonId: Int, drawableResId: Int, action: String, contentDescriptionResId: Int, templateId: Long, minimumWidth: Int) {
         if (width < minimumWidth) {
             setViewVisibility(buttonId, View.GONE)
         } else {

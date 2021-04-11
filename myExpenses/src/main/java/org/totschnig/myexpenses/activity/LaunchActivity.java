@@ -1,35 +1,25 @@
 package org.totschnig.myexpenses.activity;
 
-import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.Menu;
 
-import com.annimon.stream.function.Function;
-import com.google.android.material.snackbar.Snackbar;
-
-import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment;
-import org.totschnig.myexpenses.dialog.VersionDialogFragment;
+import org.totschnig.myexpenses.dialog.ExtendProLicenceDialogFragment;
 import org.totschnig.myexpenses.model.ContribFeature;
 import org.totschnig.myexpenses.model.CrStatus;
 import org.totschnig.myexpenses.model.Transaction;
 import org.totschnig.myexpenses.provider.TransactionProvider;
 import org.totschnig.myexpenses.provider.filter.Criteria;
 import org.totschnig.myexpenses.sync.GenericAccountService;
-import org.totschnig.myexpenses.ui.SnackbarAction;
 import org.totschnig.myexpenses.util.ContribUtils;
-import org.totschnig.myexpenses.util.DistributionHelper;
 import org.totschnig.myexpenses.util.PermissionHelper;
 import org.totschnig.myexpenses.util.Utils;
-import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
+import org.totschnig.myexpenses.util.distrib.DistributionHelper;
 import org.totschnig.myexpenses.util.licence.BillingListener;
 import org.totschnig.myexpenses.util.licence.BillingManager;
 import org.totschnig.myexpenses.util.licence.LicenceHandler;
 import org.totschnig.myexpenses.util.licence.LicenceStatus;
-import org.totschnig.myexpenses.util.licence.Package;
 import org.totschnig.myexpenses.viewmodel.UpgradeHandlerViewModel;
 
 import java.io.File;
@@ -38,8 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.widget.PopupMenu;
-import androidx.lifecycle.ViewModelProviders;
+import androidx.lifecycle.ViewModelProvider;
 import timber.log.Timber;
 
 import static android.text.format.DateUtils.DAY_IN_MILLIS;
@@ -48,7 +37,6 @@ import static org.totschnig.myexpenses.preference.PrefKey.AUTO_FILL_LEGACY;
 import static org.totschnig.myexpenses.preference.PrefKey.CATEGORIES_SORT_BY_USAGES_LEGACY;
 import static org.totschnig.myexpenses.preference.PrefKey.CURRENT_VERSION;
 import static org.totschnig.myexpenses.preference.PrefKey.HOME_CURRENCY;
-import static org.totschnig.myexpenses.preference.PrefKey.LICENCE_MIGRATION_INFO_SHOWN;
 import static org.totschnig.myexpenses.preference.PrefKey.PLANNER_CALENDAR_ID;
 import static org.totschnig.myexpenses.preference.PrefKey.PROFESSIONAL_EXPIRATION_REMINDER_LAST_SHOWN;
 import static org.totschnig.myexpenses.preference.PrefKey.SHARE_TARGET;
@@ -60,31 +48,40 @@ import static org.totschnig.myexpenses.util.PermissionHelper.PermissionGroup.CAL
 
 public abstract class LaunchActivity extends ProtectedFragmentActivity implements BillingListener {
 
-  public static final String TAG_VERSION_INFO = "VERSION_INFO";
   private BillingManager billingManager;
   private UpgradeHandlerViewModel upgradeHandlerViewModel;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+
     billingManager = licenceHandler.initBillingManager(this, true);
 
-    upgradeHandlerViewModel = ViewModelProviders.of(this).get(UpgradeHandlerViewModel.class);
+    upgradeHandlerViewModel = new ViewModelProvider(this).get(UpgradeHandlerViewModel.class);
+  }
+
+  @Override
+  public boolean dispatchCommand(int command, @Nullable Object tag) {
+    if (command == R.id.QUIT_COMMAND) {
+      finish();
+      return true;
+    }
+    return super.dispatchCommand(command, tag);
   }
 
   @Override
   protected void onPostCreate(@Nullable Bundle savedInstanceState) {
     super.onPostCreate(savedInstanceState);
-    if (DistributionHelper.isGithub()) {
-      if (licenceHandler.getLicenceStatus() != null) {
-        final long now = System.currentTimeMillis();
-        switch (licenceHandler.getLicenceStatus()) {
-          case PROFESSIONAL: {
+    if (savedInstanceState == null) {
+      if (DistributionHelper.isGithub()) {
+        if (licenceHandler.getLicenceStatus() != null) {
+          final long now = System.currentTimeMillis();
+          if (licenceHandler.getLicenceStatus() == LicenceStatus.PROFESSIONAL) {
             long licenceValidity = licenceHandler.getValidUntilMillis();
             if (licenceValidity != 0) {
               final long daysToGo = TimeUnit.MILLISECONDS.toDays(licenceValidity - now);
               if (daysToGo <= 7 && (now -
-                  getPrefHandler().getLong(PROFESSIONAL_EXPIRATION_REMINDER_LAST_SHOWN, 0)
+                  prefHandler.getLong(PROFESSIONAL_EXPIRATION_REMINDER_LAST_SHOWN, 0)
                   > DAY_IN_MILLIS)) {
                 String message;
                 if (daysToGo > 1) {
@@ -101,19 +98,10 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
                   }
                   message = getString(R.string.licence_has_expired_n_days, -daysToGo);
                 }
-
-                showUpsellSnackbar(message, R.string.extend_validity, licenceHandler::getExtendOrSwitchMessage,
-                    new Snackbar.Callback() {
-                      @Override
-                      public void onDismissed(Snackbar transientBottomBar, int event) {
-                        if ((event == DISMISS_EVENT_SWIPE) || (event == DISMISS_EVENT_ACTION)) {
-                          getPrefHandler().putLong(PROFESSIONAL_EXPIRATION_REMINDER_LAST_SHOWN, now);
-                        }
-                      }
-                    });
+                prefHandler.putLong(PROFESSIONAL_EXPIRATION_REMINDER_LAST_SHOWN, now);
+                ExtendProLicenceDialogFragment.Companion.newInstance(message).show(getSupportFragmentManager(), "UP_SELL");
               }
             }
-            break;
           }
         }
       }
@@ -123,27 +111,6 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
     }
   }
 
-  private void showUpsellSnackbar(String message, int actionLabel, Function<Package, String> formatter,
-                                  Snackbar.Callback callback) {
-    showSnackbar(message, Snackbar.LENGTH_INDEFINITE,
-        new SnackbarAction(actionLabel, v -> {
-          Package[] proPackages = licenceHandler.getProPackages();
-          if (proPackages != null) {
-            PopupMenu popup = new PopupMenu(this, v);
-            popup.setOnMenuItemClickListener(item -> {
-              startActivity(ContribInfoDialogActivity.getIntentFor(LaunchActivity.this,
-                  proPackages[item.getItemId()], false));
-              return true;
-            });
-            Menu popupMenu = popup.getMenu();
-            for (int i = 0; i < proPackages.length; i++) {
-              popupMenu.add(Menu.NONE, i, Menu.NONE, formatter.apply(proPackages[i]));
-            }
-            popup.show();
-          }
-        }), callback);
-  }
-
   /**
    * check if this is the first invocation of a new version
    * in which case help dialog is presented
@@ -151,7 +118,7 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
    * and display information to be presented upon app launch
    */
   public void newVersionCheck() {
-    int prev_version = getPrefHandler().getInt(CURRENT_VERSION, -1);
+    int prev_version = prefHandler.getInt(CURRENT_VERSION, -1);
     int current_version = DistributionHelper.getVersionNumber();
     if (prev_version < current_version) {
       if (prev_version == -1) {
@@ -159,39 +126,34 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
       }
       upgradeHandlerViewModel.upgrade(prev_version, current_version);
       boolean showImportantUpgradeInfo = false;
-      getPrefHandler().putInt(CURRENT_VERSION, current_version);
-      SharedPreferences settings = MyApplication.getInstance().getSettings();
-      Editor edit = settings.edit();
+      prefHandler.putInt(CURRENT_VERSION, current_version);
       if (prev_version < 19) {
-        edit.putString(getPrefHandler().getKey(SHARE_TARGET), settings.getString("ftp_target", ""));
-        edit.remove("ftp_target");
-        edit.apply();
+        prefHandler.putString(SHARE_TARGET, prefHandler.getString("ftp_target", ""));
+        prefHandler.remove("ftp_target");
       }
       if (prev_version < 28) {
-        Timber.i("Upgrading to version 28: Purging %d transactions from datbase",
+        Timber.i("Upgrading to version 28: Purging %d transactions from database",
             getContentResolver().delete(TransactionProvider.TRANSACTIONS_URI,
                 KEY_ACCOUNTID + " not in (SELECT _id FROM accounts)", null));
       }
       if (prev_version < 30) {
-        if (!"".equals(getPrefHandler().getString(SHARE_TARGET, ""))) {
-          edit.putBoolean(getPrefHandler().getKey(SHARE_TARGET), true);
-          edit.apply();
+        if (!"".equals(prefHandler.getString(SHARE_TARGET, ""))) {
+          prefHandler.putBoolean(SHARE_TARGET, true);
         }
       }
       if (prev_version < 40) {
         //this no longer works since we migrated time to utc format
         //  DbUtils.fixDateValues(getContentResolver());
         //we do not want to show both reminder dialogs too quickly one after the other for upgrading users
-        //if they are already above both tresholds, so we set some delay
-        edit.putLong("nextReminderContrib", Transaction.getSequenceCount() + 23);
-        edit.apply();
+        //if they are already above both thresholds, so we set some delay
+        prefHandler.putLong("nextReminderContrib", Transaction.getSequenceCount() + 23);
       }
       if (prev_version < 163) {
-        edit.remove("qif_export_file_encoding");
-        edit.apply();
+        prefHandler.remove("qif_export_file_encoding");
       }
       if (prev_version < 199) {
         //filter serialization format has changed
+        Editor edit = settings.edit();
         for (Map.Entry<String, ?> entry : settings.getAll().entrySet()) {
           String key = entry.getKey();
           String[] keyParts = key.split("_");
@@ -213,50 +175,35 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
         edit.apply();
       }
       if (prev_version < 202) {
-        String appDir = getPrefHandler().getString(APP_DIR, null);
+        String appDir = prefHandler.getString(APP_DIR, null);
         if (appDir != null) {
-          getPrefHandler().putString(APP_DIR, Uri.fromFile(new File(appDir)).toString());
+          prefHandler.putString(APP_DIR, Uri.fromFile(new File(appDir)).toString());
         }
       }
       if (prev_version < 221) {
-        getPrefHandler().putString(SORT_ORDER_LEGACY,
-            getPrefHandler().getBoolean(CATEGORIES_SORT_BY_USAGES_LEGACY, true) ?
+        prefHandler.putString(SORT_ORDER_LEGACY,
+            prefHandler.getBoolean(CATEGORIES_SORT_BY_USAGES_LEGACY, true) ?
                 "USAGES" : "ALPHABETIC");
       }
       if (prev_version < 303) {
-        if (getPrefHandler().getBoolean(AUTO_FILL_LEGACY, false)) {
-          enableAutoFill(getPrefHandler());
+        if (prefHandler.getBoolean(AUTO_FILL_LEGACY, false)) {
+          enableAutoFill(prefHandler);
         }
-        getPrefHandler().remove(AUTO_FILL_LEGACY);
+        prefHandler.remove(AUTO_FILL_LEGACY);
       }
       if (prev_version < 316) {
-        getPrefHandler().putString(HOME_CURRENCY, Utils.getHomeCurrency().code());
+        prefHandler.putString(HOME_CURRENCY, Utils.getHomeCurrency().getCode());
         invalidateHomeCurrency();
       }
       if (prev_version < 354) {
-        showImportantUpgradeInfo = GenericAccountService.getAccountsAsArray(this).length > 0;
+        showImportantUpgradeInfo = GenericAccountService.getAccounts(this).length > 0;
       }
 
-      VersionDialogFragment.newInstance(prev_version, showImportantUpgradeInfo)
-          .show(getSupportFragmentManager(), TAG_VERSION_INFO);
+      showVersionDialog(prev_version, showImportantUpgradeInfo);
     } else {
-      if (MyApplication.getInstance().getLicenceHandler().needsMigration() &&
-          !getPrefHandler().getBoolean(LICENCE_MIGRATION_INFO_SHOWN, false)) {
-        Bundle bundle = new Bundle();
-        bundle.putCharSequence(
-            ConfirmationDialogFragment.KEY_MESSAGE,
-            Utils.getTextWithAppName(this, R.string.licence_migration_info));
-        bundle.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE,
-            R.id.REQUEST_LICENCE_MIGRATION_COMMAND);
-        bundle.putString(ConfirmationDialogFragment.KEY_PREFKEY,
-            LICENCE_MIGRATION_INFO_SHOWN.getKey());
-        bundle.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.pref_request_licence_title);
-        ConfirmationDialogFragment.newInstance(bundle).show(getSupportFragmentManager(),
-            "RESTORE");
-      }
-      if (!ContribFeature.SYNCHRONIZATION.hasAccess() && ContribFeature.SYNCHRONIZATION.usagesLeft(getPrefHandler()) < 1 &&
-          !getPrefHandler().getBoolean(SYNC_UPSELL_NOTIFICATION_SHOWN, false)) {
-        getPrefHandler().putBoolean(SYNC_UPSELL_NOTIFICATION_SHOWN, true);
+      if (!licenceHandler.hasTrialAccessTo(ContribFeature.SYNCHRONIZATION) &&
+          !prefHandler.getBoolean(SYNC_UPSELL_NOTIFICATION_SHOWN, false)) {
+        prefHandler.putBoolean(SYNC_UPSELL_NOTIFICATION_SHOWN, true);
         ContribUtils.showContribNotification(this, ContribFeature.SYNCHRONIZATION);
       }
     }
@@ -264,7 +211,7 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
   }
 
   private void checkCalendarPermission() {
-    if (!getPrefHandler().getString(PLANNER_CALENDAR_ID, "-1").equals("-1")) {
+    if (!"-1".equals(prefHandler.getString(PLANNER_CALENDAR_ID, "-1"))) {
       if (!CALENDAR.hasPermission(this)) {
         requestPermission(CALENDAR);
       }
@@ -274,14 +221,12 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
   @Override
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    switch (requestCode) {
-      case PermissionHelper.PERMISSIONS_REQUEST_WRITE_CALENDAR:
-        if (!PermissionHelper.allGranted(grantResults)) {
-          if (!CALENDAR.shouldShowRequestPermissionRationale(this)) {
-            MyApplication.getInstance().removePlanner();
-          }
+    if (requestCode == PermissionHelper.PERMISSIONS_REQUEST_WRITE_CALENDAR) {
+      if (!PermissionHelper.allGranted(grantResults)) {
+        if (!CALENDAR.shouldShowRequestPermissionRationale(this)) {
+          requireApplication().removePlanner();
         }
-        break;
+      }
     }
   }
 
@@ -292,18 +237,15 @@ public abstract class LaunchActivity extends ProtectedFragmentActivity implement
 
   @Override
   public void onBillingSetupFailed(@NonNull String reason) {
-    CrashHandler.reportWithTag(String.format("Billing setup failed (%s)", reason), LicenceHandler.TAG);
+    LicenceHandler.Companion.log().w("Billing setup failed (%s)", reason);
   }
 
   @Override
-  public void onLicenceStatusSet(@Nullable LicenceStatus newStatus, @Nullable LicenceStatus oldStatus) {
-    if (newStatus != oldStatus) {
-      if (newStatus != null) {
-        showMessage(String.format("%s (%s)", getString(R.string.licence_validation_premium),
-            getString(newStatus.getResId())));
-      } else {
-        showSnackbar(R.string.licence_validation_failure, Snackbar.LENGTH_LONG);
-      }
+  public void onLicenceStatusSet(String newStatus) {
+    if (newStatus != null) {
+      showSnackbar(getString(R.string.licence_validation_premium) + " (" + newStatus + ")");
+    } else {
+      showSnackbar(R.string.licence_validation_failure);
     }
   }
 

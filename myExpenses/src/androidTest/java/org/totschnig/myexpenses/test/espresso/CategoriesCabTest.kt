@@ -3,20 +3,20 @@ package org.totschnig.myexpenses.test.espresso
 import android.content.ContentUris
 import android.content.ContentUris.appendId
 import android.content.ContentValues
+import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
+import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
-import androidx.test.filters.FlakyTest
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.rule.ActivityTestRule
-import org.assertj.core.api.Assertions
+import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers
 import org.junit.After
-import org.junit.Rule
 import org.junit.Test
 import org.threeten.bp.LocalDate
 import org.totschnig.myexpenses.R
@@ -38,50 +38,48 @@ import org.totschnig.myexpenses.viewmodel.data.Budget
 import java.util.*
 
 class CategoriesCabTest : BaseUiTest() {
-    @get:Rule
-    var mActivityRule: ActivityTestRule<ManageCategories?> = ActivityTestRule(ManageCategories::class.java, true, false)
+    private lateinit var activityScenario: ActivityScenario<ManageCategories>
 
     private val contentResolver
-        get() = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        get() = targetContext.contentResolver
 
-    val currency = CurrencyUnit.create(Currency.getInstance("EUR"))
-    lateinit var account: Account
+    val currency = CurrencyUnit(Currency.getInstance("EUR"))
+    private lateinit var account: Account
+    private var categoryId: Long = 0
 
-    private fun fixtureWithMappedTransaction() {
+    private fun baseFixture() {
         account = Account("Test account 1", currency, 0, "",
                 AccountType.CASH, Account.DEFAULT_COLOR)
         account.save()
-        val categoryId = Category.write(0, "TestCategory", null)
+        categoryId = Category.write(0, "TestCategory", null)
+    }
+
+    private fun fixtureWithMappedTransaction() {
+        baseFixture()
         with(Transaction.getNewInstance(account.id)) {
-            amount = Money(CurrencyUnit.create(Currency.getInstance("USD")), -1200L)
+            amount = Money(CurrencyUnit(Currency.getInstance("USD")), -1200L)
             catId = categoryId
             save()
         }
     }
 
     private fun fixtureWithMappedTemplate() {
-        account = Account("Test account 1", CurrencyUnit.create(Currency.getInstance("EUR")), 0, "",
-                AccountType.CASH, Account.DEFAULT_COLOR)
-        account.save()
-        val categoryId = Category.write(0, "TestCategory", null)
+        baseFixture()
         with(Template(account, Transactions.TYPE_TRANSACTION, null)) {
-            amount = Money(CurrencyUnit.create(Currency.getInstance("USD")), -1200L)
+            amount = Money(CurrencyUnit(Currency.getInstance("USD")), -1200L)
             catId = categoryId
             save()
         }
     }
 
     private fun fixtureWithMappedBudget() {
-        account = Account("Test account 1", CurrencyUnit.create(Currency.getInstance("EUR")), 0, "",
-                AccountType.CASH, Account.DEFAULT_COLOR)
-        account.save()
-        val categoryId = Category.write(0, "TestCategory", null)
-        val budget = Budget(0L, account.id, "TITLE", "DESCRIPTION", currency, Money(currency, 200000L), Grouping.MONTH, -1, null as LocalDate?, null as LocalDate?, account.getLabel(), true)
+        baseFixture()
+        val budget = Budget(0L, account.id, "TITLE", "DESCRIPTION", currency, Money(currency, 200000L), Grouping.MONTH, -1, null as LocalDate?, null as LocalDate?, account.label, true)
         val budgetId = ContentUris.parseId(contentResolver!!.insert(TransactionProvider.BUDGETS_URI, budget.toContentValues())!!)
         setCategoryBudget(budgetId, categoryId, 50000)
     }
 
-    fun setCategoryBudget(budgetId: Long, categoryId: Long, amount: Long) {
+    private fun setCategoryBudget(budgetId: Long, categoryId: Long, @Suppress("SameParameterValue") amount: Long) {
         with(ContentValues(1)) {
             put(DatabaseConstants.KEY_BUDGET, amount)
             contentResolver!!.update(appendId(appendId(TransactionProvider.BUDGETS_URI.buildUpon(), budgetId), categoryId).build(),
@@ -93,56 +91,61 @@ class CategoriesCabTest : BaseUiTest() {
     fun tearDown() {
         Account.delete(account.id)
         contentResolver?.delete(Category.CONTENT_URI, null, null)
+        activityScenario.close()
     }
 
-    @FlakyTest
     @Test
     fun shouldNotDeleteCategoryMappedToTransaction() {
         fixtureWithMappedTransaction()
-        mActivityRule.launchActivity(null)
-        val origListSize = waitForAdapter().count
-        Espresso.onData(Matchers.`is`(Matchers.instanceOf(org.totschnig.myexpenses.viewmodel.data.Category::class.java)))
-                .atPosition(0)
-                .perform(ViewActions.longClick())
-        clickMenuItem(R.id.DELETE_COMMAND, R.string.menu_delete, true)
-        Assertions.assertThat(waitForAdapter().count).isEqualTo(origListSize)
-        onView(ViewMatchers.withId(com.google.android.material.R.id.snackbar_text))
-                .check(matches(withText(mActivityRule.activity!!.resources.getQuantityString(
+        val origListSize = launchAndOpenCab()
+        clickMenuItem(R.id.DELETE_COMMAND, true)
+        assertThat(waitForAdapter().count).isEqualTo(origListSize)
+        onView(withId(com.google.android.material.R.id.snackbar_text))
+                .check(matches(withText(getQuantityString(
                         R.plurals.not_deletable_mapped_transactions, 1, 1))))
     }
 
-    @FlakyTest
     @Test
     fun shouldNotDeleteCategoryMappedToTemplate() {
         fixtureWithMappedTemplate()
-        mActivityRule.launchActivity(null)
-        val origListSize = waitForAdapter().count
-        Espresso.onData(Matchers.`is`(Matchers.instanceOf(org.totschnig.myexpenses.viewmodel.data.Category::class.java)))
-                .atPosition(0)
-                .perform(ViewActions.longClick())
-        clickMenuItem(R.id.DELETE_COMMAND, R.string.menu_delete, true)
-        Assertions.assertThat(waitForAdapter().count).isEqualTo(origListSize)
-        onView(ViewMatchers.withId(com.google.android.material.R.id.snackbar_text))
-                .check(matches(withText(mActivityRule.activity!!.resources.getQuantityString(
+        val origListSize = launchAndOpenCab()
+        clickMenuItem(R.id.DELETE_COMMAND, true)
+        assertThat(waitForAdapter().count).isEqualTo(origListSize)
+        onView(withId(com.google.android.material.R.id.snackbar_text))
+                .check(matches(withText(getQuantityString(
                         R.plurals.not_deletable_mapped_templates, 1, 1))))
     }
 
     @Test
     fun shouldNotDeleteCategoryMappedToBudget() {
         fixtureWithMappedBudget()
-        mActivityRule.launchActivity(null)
+        val origListSize = launchAndOpenCab()
+        clickMenuItem(R.id.DELETE_COMMAND, true)
+        onView(withText(R.string.warning_delete_category_with_budget)).check(matches(isDisplayed()))
+        onView(withText(android.R.string.cancel)).perform(click())
+        assertThat(waitForAdapter().count).isEqualTo(origListSize)
+    }
+
+    private fun launchAndOpenCab(): Int {
+        activityScenario = ActivityScenario.launch(ManageCategories::class.java)
         val origListSize = waitForAdapter().count
         Espresso.onData(Matchers.`is`(Matchers.instanceOf(org.totschnig.myexpenses.viewmodel.data.Category::class.java)))
                 .atPosition(0)
                 .perform(ViewActions.longClick())
-        clickMenuItem(R.id.DELETE_COMMAND, R.string.menu_delete, true)
-        onView(withText(R.string.warning_delete_category_with_budget)).check(matches(isDisplayed()))
-        onView(withText(android.R.string.cancel)).perform(ViewActions.click())
-        Assertions.assertThat(waitForAdapter().count).isEqualTo(origListSize)
-
+        return origListSize
     }
 
-    override fun getTestRule(): ActivityTestRule<out ProtectedFragmentActivity?> {
-        return mActivityRule
+    @Test
+    fun shouldCreateSubCategory() {
+        baseFixture()
+        launchAndOpenCab()
+        clickMenuItem(R.id.CREATE_SUB_COMMAND, true)
+        onView(withId(R.id.editText))
+                .perform(replaceText("Subcategory"), closeSoftKeyboard())
+        onView(withId(android.R.id.button1)).perform(click())
+        assertThat(Category.countSub(categoryId)).isEqualTo(1)
     }
+
+    override val testScenario: ActivityScenario<out ProtectedFragmentActivity>
+        get() = activityScenario
 }

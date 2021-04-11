@@ -15,12 +15,12 @@ import org.totschnig.myexpenses.provider.TransactionProvider
 const val CLICK_ACTION_SAVE = "save"
 const val CLICK_ACTION_EDIT = "edit"
 
-class TemplateWidget: AbstractWidget(TemplateWidgetService::class.java, R.string.no_templates, PrefKey.PROTECTION_ENABLE_TEMPLATE_WIDGET) {
+class TemplateWidget: AbstractWidget(TemplateWidgetService::class.java, PrefKey.PROTECTION_ENABLE_TEMPLATE_WIDGET) {
+    override fun emptyTextResourceId(context: Context, appWidgetId: Int) = R.string.no_templates
 
     override fun handleWidgetClick(context: Context, intent: Intent) {
         val templateId = intent.getLongExtra(DatabaseConstants.KEY_ROWID, 0)
-        val clickAction = intent.getStringExtra(KEY_CLICK_ACTION)
-        when (clickAction) {
+        when (intent.getStringExtra(KEY_CLICK_ACTION)) {
             null -> {
                 context.startActivity(Intent(context, ManageTemplates::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -33,7 +33,7 @@ class TemplateWidget: AbstractWidget(TemplateWidgetService::class.java, R.string
                             context.getString(R.string.warning_instantiate_template_from_widget_password_protected),
                             Toast.LENGTH_LONG).show()
                 } else {
-                    Transaction.getInstanceFromTemplate(templateId)?.let {
+                    Transaction.getInstanceFromTemplateWithTags(templateId)?.let {
                         if (it.first!!.save(true) != null && it.first!!.saveTags(it.second, context.contentResolver)) {
                             Toast.makeText(context,
                                     context.resources.getQuantityString(R.plurals.save_transaction_from_template_success, 1, 1),

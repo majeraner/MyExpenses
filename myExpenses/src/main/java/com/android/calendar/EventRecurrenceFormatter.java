@@ -50,7 +50,7 @@ public class EventRecurrenceFormatter
                     final String dateStr = DateUtils.formatDateTime(context,
                             t.toMillis(false), DateUtils.FORMAT_NUMERIC_DATE);
                     sb.append(r.getString(R.string.endByDate, dateStr));
-                } catch (TimeFormatException e) {
+                } catch (TimeFormatException ignored) {
                 }
             }
 
@@ -62,7 +62,7 @@ public class EventRecurrenceFormatter
         }
 
         // TODO Implement "Until" portion of string, as well as custom settings
-        int interval = recurrence.interval <= 1 ? 1 : recurrence.interval;
+        int interval = Math.max(recurrence.interval, 1);
         switch (recurrence.freq) {
             case EventRecurrence.DAILY:
                 return r.getQuantityString(R.plurals.daily, interval, interval) + endString;
@@ -108,23 +108,30 @@ public class EventRecurrenceFormatter
                 }
             }
             case EventRecurrence.MONTHLY: {
+                StringBuilder sb = new StringBuilder();
+                sb.append(r.getQuantityString(R.plurals.monthly, interval, interval));
                 if (recurrence.bydayCount == 1) {
                     int weekday = recurrence.startDate.weekDay;
                     // Cache this stuff so we won't have to redo work again later.
                     cacheMonthRepeatStrings(r, weekday);
                     int dayNumber = (recurrence.startDate.monthDay - 1) / 7;
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(r.getString(R.string.monthly));
                     sb.append(" (");
                     sb.append(mMonthRepeatByDayOfWeekStrs[weekday][dayNumber]);
                     sb.append(")");
                     sb.append(endString);
-                    return sb.toString();
+                } else if (recurrence.bysetposCount == 1 && recurrence.bysetpos[0] == -1) {
+                    sb.append(" (");
+                    sb.append(r.getString(R.string.recurrence_last_day_of_month));
+                    sb.append(")");
                 }
-                return r.getString(R.string.monthly_on_day, String.valueOf(recurrence.startDate.monthDay)) + endString;
+                else {
+                    sb.append(r.getString(R.string.monthly_on_day, String.valueOf(recurrence.startDate.monthDay)));
+                }
+                sb.append(endString);
+                return sb.toString();
             }
             case EventRecurrence.YEARLY:
-                return r.getString(R.string.yearly,
+                return r.getQuantityString(R.plurals.yearly, interval, interval) + r.getString(R.string.yearly_on_day,
                     DateUtils.formatDateTime(context, recurrence.startDate.toMillis(false), 0))
                   + endString;
         }

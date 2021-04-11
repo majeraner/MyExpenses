@@ -6,7 +6,6 @@ import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.TypedValue;
@@ -17,37 +16,33 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.github.lzyzsd.circleprogress.DonutProgress;
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
-import org.totschnig.myexpenses.model.Account;
 import org.totschnig.myexpenses.model.AccountType;
 import org.totschnig.myexpenses.preference.PrefHandler;
 
+import androidx.annotation.AttrRes;
 import androidx.annotation.ColorInt;
 import androidx.annotation.Nullable;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.AppCompatButton;
-import androidx.appcompat.widget.AppCompatDrawableManager;
-import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.core.view.ViewCompat;
+import androidx.core.widget.ImageViewCompat;
 
 import static org.totschnig.myexpenses.preference.PrefKey.TRANSACTION_WITH_TIME;
 import static org.totschnig.myexpenses.preference.PrefKey.TRANSACTION_WITH_VALUE_DATE;
 
 public class UiUtils {
 
-  private UiUtils() {}
+  private UiUtils() {
+  }
 
-  public static void configureSnackbarForDarkTheme(Snackbar snackbar, ProtectedFragmentActivity.ThemeType themeType) {
+  public static void increaseSnackbarMaxLines(Snackbar snackbar) {
     View snackbarView = snackbar.getView();
     TextView textView = snackbarView.findViewById(com.google.android.material.R.id.snackbar_text);
-    if (themeType.equals(ProtectedFragmentActivity.ThemeType.dark)) {
-      //Workaround for https://issuetracker.google.com/issues/37120757
-      snackbarView.setBackgroundColor(Color.WHITE);
-      textView.setTextColor(Color.BLACK);
-    }
     textView.setMaxLines(10);
   }
 
@@ -57,8 +52,7 @@ public class UiUtils {
   }
 
   static Drawable getTintedDrawableForContext(Context context, int drawableResId) {
-    //noinspection RestrictedApi
-    return AppCompatDrawableManager.get().getDrawable(context, drawableResId);
+    return AppCompatResources.getDrawable(context, drawableResId);
   }
 
   public static Bitmap drawableToBitmap(Drawable d) {
@@ -84,13 +78,12 @@ public class UiUtils {
 
   public static void setBackgroundTintListOnFab(FloatingActionButton fab, int color) {
     fab.setBackgroundTintList(ColorStateList.valueOf(color));
-    DrawableCompat.setTint(fab.getDrawable(), ColorUtils.isBrightColor(color) ? Color.BLACK : Color.WHITE);
-    fab.invalidate();
+    ImageViewCompat.setImageTintList(fab, ColorStateList.valueOf(MoreUiUtilsKt.getBestForeground(color)));
   }
 
   public static void setBackgroundOnButton(AppCompatButton button, int color) {
     //noinspection RestrictedApi
-    button.setSupportBackgroundTintList(new ColorStateList(new int[][] {{0}}, new int[] {color}));
+    button.setSupportBackgroundTintList(new ColorStateList(new int[][]{{0}}, new int[]{color}));
   }
 
   public static void configureAmountTextViewForHebrew(TextView amount) {
@@ -139,24 +132,18 @@ public class UiUtils {
 
   public static void setCompoundDrawablesCompatWithIntrinsicBounds(TextView textView, int start, int top, int end, int bottom) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-      textView.setCompoundDrawablesRelativeWithIntrinsicBounds(start, top, end,bottom);
+      textView.setCompoundDrawablesRelativeWithIntrinsicBounds(start, top, end, bottom);
     } else {
-      textView.setCompoundDrawablesWithIntrinsicBounds(start, top, end,bottom);
+      textView.setCompoundDrawablesWithIntrinsicBounds(start, top, end, bottom);
     }
   }
 
-  /** Returns the value of the desired theme integer attribute, or -1 if not found **/
-  @ColorInt public static int themeIntAttr(@Nullable Context context, int attr) {
-    if (context != null) {
-      final Resources.Theme theme = context.getTheme();
-      if (theme != null) {
-        final TypedValue value = new TypedValue();
-        if (theme.resolveAttribute(attr, value, true)) {
-          return value.data;
-        }
-      }
-    }
-    return -1;
+  /**
+   * Returns the value of the desired theme integer attribute, or -1 if not found
+   **/
+  @ColorInt
+  public static int getColor(@Nullable Context context, @AttrRes int attr) {
+    return MaterialColors.getColor(context, attr, context.getClass().getCanonicalName());
   }
 
   public static boolean themeBoolAttr(Context context, int attr) {

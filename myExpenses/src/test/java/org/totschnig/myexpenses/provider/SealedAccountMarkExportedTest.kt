@@ -2,11 +2,13 @@ package org.totschnig.myexpenses.provider
 
 import android.content.ContentUris
 import android.content.ContentValues
+import androidx.test.core.app.ApplicationProvider
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.totschnig.myexpenses.MyApplication
 import org.totschnig.myexpenses.model.Account
 import org.totschnig.myexpenses.model.AccountType
 import org.totschnig.myexpenses.model.CurrencyUnit
@@ -20,14 +22,14 @@ class SealedAccountMarkExportedTest {
 
     @Test
     fun allowExportOnSealedAccount() {
-        val currency = CurrencyUnit.create(Currency.getInstance("EUR"))
-        val resolver = RuntimeEnvironment.application.contentResolver
-        val sealedAccount = Account("EUR-Account", CurrencyUnit.create(Currency.getInstance("EUR")), 0L, null, AccountType.CASH, Account.DEFAULT_COLOR)
+        val currency = CurrencyUnit(Currency.getInstance("EUR"))
+        val resolver = ApplicationProvider.getApplicationContext<MyApplication>().contentResolver
+        val sealedAccount = Account("EUR-Account", CurrencyUnit(Currency.getInstance("EUR")), 0L, null, AccountType.CASH, Account.DEFAULT_COLOR)
         sealedAccount.save()
         val sealed = Transaction.getNewInstance(sealedAccount.id)
         sealed.amount = Money(currency, 500L)
         sealed.save()
-        val openAccount = Account("EUR-Account", CurrencyUnit.create(Currency.getInstance("EUR")), 0L, null, AccountType.CASH, Account.DEFAULT_COLOR)
+        val openAccount = Account("EUR-Account", CurrencyUnit(Currency.getInstance("EUR")), 0L, null, AccountType.CASH, Account.DEFAULT_COLOR)
         openAccount.save()
         val open = Transaction.getNewInstance(openAccount.id)
         open.amount = Money(currency, 500L)

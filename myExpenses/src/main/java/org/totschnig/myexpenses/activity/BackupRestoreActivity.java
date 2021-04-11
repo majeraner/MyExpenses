@@ -25,7 +25,6 @@ import com.annimon.stream.Stream;
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.dialog.BackupListDialogFragment;
 import org.totschnig.myexpenses.dialog.BackupSourcesDialogFragment;
-import org.totschnig.myexpenses.dialog.CommitSafeDialogFragment;
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment;
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment.ConfirmationDialogListener;
 import org.totschnig.myexpenses.dialog.DialogUtils;
@@ -33,7 +32,6 @@ import org.totschnig.myexpenses.dialog.MessageDialogFragment;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.task.RestoreTask;
 import org.totschnig.myexpenses.task.TaskExecutionFragment;
-import org.totschnig.myexpenses.ui.SnackbarAction;
 import org.totschnig.myexpenses.util.AppDirHelper;
 import org.totschnig.myexpenses.util.PermissionHelper;
 import org.totschnig.myexpenses.util.Result;
@@ -45,13 +43,15 @@ import java.util.ArrayList;
 
 import androidx.annotation.NonNull;
 import androidx.documentfile.provider.DocumentFile;
+import androidx.fragment.app.Fragment;
 import eltos.simpledialogfragment.SimpleDialog;
 import eltos.simpledialogfragment.form.Input;
 import eltos.simpledialogfragment.form.SimpleFormDialog;
-import icepick.Icepick;
 import icepick.State;
 import timber.log.Timber;
 
+import static org.totschnig.myexpenses.preference.PrefKey.PROTECTION_DEVICE_LOCK_SCREEN;
+import static org.totschnig.myexpenses.preference.PrefKey.PROTECTION_LEGACY;
 import static org.totschnig.myexpenses.task.RestoreTask.KEY_PASSWORD;
 
 public class BackupRestoreActivity extends ProtectedFragmentActivity
@@ -69,16 +69,14 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
   int taskResult = RESULT_OK;
 
   public void onCreate(Bundle savedInstanceState) {
-    setTheme(getThemeIdTranslucent());
     super.onCreate(savedInstanceState);
     ComponentName callingActivity = getCallingActivity();
     if (callingActivity != null && Utils.getSimpleClassNameFromComponentName(callingActivity)
-        .equals(SplashActivity.class.getSimpleName())) {
+        .equals(OnboardingActivity.class.getSimpleName())) {
       calledFromOnboarding = true;
       Timber.i("Called from onboarding");
     }
     if (savedInstanceState != null) {
-      Icepick.restoreInstanceState(this, savedInstanceState);
       return;
     }
     String action = getIntent().getAction();
@@ -94,20 +92,22 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
           abort(getString(R.string.io_error_appdir_null));
           return;
         }
-        boolean isProtected = !TextUtils.isEmpty(getPrefHandler().getString(PrefKey.EXPORT_PASSWORD, null));
+        boolean isProtected = !TextUtils.isEmpty(prefHandler.getString(PrefKey.EXPORT_PASSWORD, null));
         StringBuilder message = new StringBuilder();
         message.append(getString(R.string.warning_backup, FileUtils.getPath(this, appDir.getUri())))
             .append(" ");
         if (isProtected) {
           message.append(getString(R.string.warning_backup_protected)).append(" ");
+        } else if (prefHandler.getBoolean(PROTECTION_LEGACY, false) || prefHandler.getBoolean(PROTECTION_DEVICE_LOCK_SCREEN, false)) {
+          message.append(unencryptedBackupWarning()).append(" ");
         }
         message.append(getString(R.string.continue_confirmation));
         MessageDialogFragment.newInstance(
-            isProtected ? R.string.dialog_title_backup_protected : R.string.menu_backup,
+            getString(isProtected ? R.string.dialog_title_backup_protected : R.string.menu_backup),
             message.toString(),
-            new MessageDialogFragment.Button(android.R.string.yes,
+            new MessageDialogFragment.Button(R.string.response_yes,
                 R.id.BACKUP_COMMAND, null), null,
-            MessageDialogFragment.Button.noButton(), isProtected ? R.drawable.ic_lock : 0)
+            MessageDialogFragment.noButton(), isProtected ? R.drawable.ic_lock : 0)
             .show(getSupportFragmentManager(), "BACKUP");
         break;
       }
@@ -158,25 +158,24 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
   public boolean dispatchCommand(int command, Object tag) {
     if (super.dispatchCommand(command, tag))
       return true;
-    switch (command) {
-      case R.id.BACKUP_COMMAND:
-        if (AppDirHelper.checkAppFolderWarning(this)) {
-          doBackup();
-        } else {
-          Bundle b = new Bundle();
-          b.putInt(ConfirmationDialogFragment.KEY_TITLE,
-              R.string.dialog_title_attention);
-          b.putCharSequence(
-              ConfirmationDialogFragment.KEY_MESSAGE,
-              Utils.getTextWithAppName(this, R.string.warning_app_folder_will_be_deleted_upon_uninstall));
-          b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE,
-              R.id.BACKUP_COMMAND_DO);
-          b.putString(ConfirmationDialogFragment.KEY_PREFKEY,
-              PrefKey.APP_FOLDER_WARNING_SHOWN.getKey());
-          ConfirmationDialogFragment.newInstance(b).show(
-              getSupportFragmentManager(), "APP_FOLDER_WARNING");
-        }
-        return true;
+    if (command == R.id.BACKUP_COMMAND) {
+      if (AppDirHelper.checkAppFolderWarning(this)) {
+        doBackup();
+      } else {
+        Bundle b = new Bundle();
+        b.putInt(ConfirmationDialogFragment.KEY_TITLE,
+            R.string.dialog_title_attention);
+        b.putCharSequence(
+            ConfirmationDialogFragment.KEY_MESSAGE,
+            Utils.getTextWithAppName(this, R.string.warning_app_folder_will_be_deleted_upon_uninstall));
+        b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE,
+            R.id.BACKUP_COMMAND_DO);
+        b.putString(ConfirmationDialogFragment.KEY_PREFKEY,
+            PrefKey.APP_FOLDER_WARNING_SHOWN.getKey());
+        ConfirmationDialogFragment.newInstance(b).show(
+            getSupportFragmentManager(), "APP_FOLDER_WARNING");
+      }
+      return true;
     }
     return false;
   }
@@ -184,7 +183,7 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
   protected void doBackup() {
     Result appDirStatus = AppDirHelper.checkAppDir(this);//TODO this check leads to strict mode violation, can we get rid of it ?
     if (appDirStatus.isSuccess()) {
-      startTaskExecution(TaskExecutionFragment.TASK_BACKUP, null, getPrefHandler().getString(PrefKey.EXPORT_PASSWORD, null),
+      startTaskExecution(TaskExecutionFragment.TASK_BACKUP, null, prefHandler.getString(PrefKey.EXPORT_PASSWORD, null),
           R.string.menu_backup, true);
     } else {
       abort(appDirStatus.print(this));
@@ -195,25 +194,22 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
   public void onPostExecute(int taskId, Object result) {
     super.onPostExecute(taskId, result);
     Result<DocumentFile> r = (Result<DocumentFile>) result;
-    switch (taskId) {
-      case TaskExecutionFragment.TASK_BACKUP: {
-        if (!r.isSuccess()) {
-          onProgressUpdate(r.print(this));
-        } else {
-          Uri backupFileUri = r.getExtra().getUri();
-          onProgressUpdate(getString(r.getMessage(), FileUtils.getPath(this, backupFileUri)));
-          if (PrefKey.PERFORM_SHARE.getBoolean(false)) {
-            ArrayList<Uri> uris = new ArrayList<>();
-            uris.add(backupFileUri);
-            Result shareResult = ShareUtils.share(this, uris,
-                PrefKey.SHARE_TARGET.getString("").trim(),
-                "application/zip");
-            if (!shareResult.isSuccess()) {
-              onProgressUpdate(shareResult.print(this));
-            }
+    if (taskId == TaskExecutionFragment.TASK_BACKUP) {
+      if (!r.isSuccess()) {
+        onProgressUpdate(r.print(this));
+      } else {
+        Uri backupFileUri = r.getExtra().getUri();
+        onProgressUpdate(getString(r.getMessage(), FileUtils.getPath(this, backupFileUri)));
+        if (PrefKey.PERFORM_SHARE.getBoolean(false)) {
+          ArrayList<Uri> uris = new ArrayList<>();
+          uris.add(backupFileUri);
+          Result shareResult = ShareUtils.share(this, uris,
+              PrefKey.SHARE_TARGET.getString("").trim(),
+              "application/zip");
+          if (!shareResult.isSuccess()) {
+            onProgressUpdate(shareResult.print(this));
           }
         }
-        break;
       }
     }
   }
@@ -250,26 +246,24 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
 
   @Override
   public boolean onResult(@NonNull String dialogTag, int which, @NonNull Bundle extras) {
-    if (which == BUTTON_POSITIVE) {
-      switch (dialogTag) {
-        case DIALOG_TAG_PASSWORD: {
-          doRestore(extras);
-          return true;
-        }
+    if (DIALOG_TAG_PASSWORD.equals(dialogTag)) {
+      if (which == BUTTON_POSITIVE) {
+        doRestore(extras);
+      } else {
+        abort();
       }
+      return true;
     }
     return false;
   }
 
   @Override
   public void onPositive(Bundle args) {
-    switch (args.getInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE)) {
-      case R.id.BACKUP_COMMAND_DO:
-        doBackup();
-        break;
-      case R.id.RESTORE_COMMAND:
-        doRestore(args);
-        break;
+    int anInt = args.getInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE);
+    if (anInt == R.id.BACKUP_COMMAND_DO) {
+      doBackup();
+    } else if (anInt == R.id.RESTORE_COMMAND) {
+      doRestore(args);
     }
   }
 
@@ -293,14 +287,17 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
 
   @Override
   public void onNegative(Bundle args) {
+    abort();
+  }
+
+  public void abort() {
     setResult(RESULT_CANCELED);
     finish();
   }
 
   @Override
   public void onDismissOrCancel(Bundle args) {
-    setResult(RESULT_CANCELED);
-    finish();
+    abort();
   }
 
   @Override
@@ -311,35 +308,25 @@ public class BackupRestoreActivity extends ProtectedFragmentActivity
 
   @Override
   public void onMessageDialogDismissOrCancel() {
-    finish();
+    abort();
   }
 
   @Override
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-    switch (requestCode) {
-      case PermissionHelper.PERMISSIONS_REQUEST_WRITE_CALENDAR:
-        if (!PermissionHelper.allGranted(grantResults)) {
-          ((DialogUtils.CalendarRestoreStrategyChangedListener)
-              getSupportFragmentManager().findFragmentByTag(FRAGMENT_TAG)).onCalendarPermissionDenied();
+    if (requestCode == PermissionHelper.PERMISSIONS_REQUEST_WRITE_CALENDAR) {
+      if (!PermissionHelper.allGranted(grantResults)) {
+        final Fragment fragment = getSupportFragmentManager().findFragmentByTag(FRAGMENT_TAG);
+        if (fragment instanceof DialogUtils.CalendarRestoreStrategyChangedListener) {
+          ((DialogUtils.CalendarRestoreStrategyChangedListener) fragment).onCalendarPermissionDenied();
         }
-        return;
+      }
+      return;
     }
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
   }
 
   @Override
-  public void showSnackbar(@NonNull CharSequence message, int duration, SnackbarAction snackbarAction) {
-    final CommitSafeDialogFragment fragment = (CommitSafeDialogFragment) getSupportFragmentManager().findFragmentByTag(FRAGMENT_TAG);
-    if (fragment != null) {
-      fragment.showSnackbar(message, duration, snackbarAction);
-    } else {
-      super.showSnackbar(message, duration, snackbarAction);
-    }
-  }
-
-  @Override
-  protected void onSaveInstanceState(Bundle outState) {
-    super.onSaveInstanceState(outState);
-    Icepick.saveInstanceState(this, outState);
+  protected int getSnackbarContainerId() {
+    return  android.R.id.content;
   }
 }

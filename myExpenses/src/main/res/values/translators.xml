@@ -3,6 +3,9 @@
 
     <string-array name="translators_ar">
         <item>Ar.Alothaim</item>
+        <item>Rageriser</item>
+        <item>Anas Zerkli (Damascus-Syria)</item>
+        <item>https://gengo.com/</item>
     </string-array>
 
     <string-array name="translators_bg">
@@ -86,6 +89,10 @@
         <item>Pongsametrey</item>
     </string-array>
 
+    <string-array name="translators_kn">
+        <item>Vishwa Prakash HV</item>
+    </string-array>
+
     <string-array name="translators_ko">
         <item>halcyonest</item>
     </string-array>
@@ -150,8 +157,12 @@
         <item>Hiếu Văn</item>
     </string-array>
 
-    <string-array name="translators_zh_tw">
+    <string-array name="translators_zh_hk">
         <item>Casper Li</item>
+    </string-array>
+
+    <string-array name="translators_zh_tw">
+        <item>chyannie</item>
     </string-array>
 
     <string-array name="translators_zh">

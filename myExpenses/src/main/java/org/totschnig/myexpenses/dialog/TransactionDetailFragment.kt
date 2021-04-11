@@ -14,16 +14,14 @@
  */
 package org.totschnig.myexpenses.dialog
 
-import android.app.Activity
 import android.app.Dialog
 import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
 import androidx.appcompat.app.AlertDialog
-import androidx.lifecycle.Observer
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.material.snackbar.Snackbar
 import com.squareup.picasso.Picasso
@@ -34,16 +32,15 @@ import org.threeten.bp.format.DateTimeFormatter
 import org.threeten.bp.format.FormatStyle
 import org.totschnig.myexpenses.MyApplication
 import org.totschnig.myexpenses.R
+import org.totschnig.myexpenses.activity.EDIT_REQUEST
 import org.totschnig.myexpenses.activity.ExpenseEdit
 import org.totschnig.myexpenses.activity.ImageViewIntentProvider
-import org.totschnig.myexpenses.activity.ProtectedFragmentActivity
 import org.totschnig.myexpenses.adapter.SplitPartRVAdapter
 import org.totschnig.myexpenses.databinding.TransactionDetailBinding
 import org.totschnig.myexpenses.model.AccountType
 import org.totschnig.myexpenses.model.CrStatus
 import org.totschnig.myexpenses.model.Money
 import org.totschnig.myexpenses.model.Plan
-import org.totschnig.myexpenses.preference.PrefHandler
 import org.totschnig.myexpenses.provider.DatabaseConstants
 import org.totschnig.myexpenses.provider.TransactionProvider
 import org.totschnig.myexpenses.util.CurrencyFormatter
@@ -57,7 +54,7 @@ import org.totschnig.myexpenses.viewmodel.TransactionDetailViewModel
 import org.totschnig.myexpenses.viewmodel.data.Transaction
 import javax.inject.Inject
 
-class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.OnClickListener {
+class TransactionDetailFragment : BaseDialogFragment(), DialogInterface.OnClickListener {
     private var transactionData: List<Transaction>? = null
     private var _binding: TransactionDetailBinding? = null
 
@@ -71,21 +68,21 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
     lateinit var currencyFormatter: CurrencyFormatter
 
     @Inject
-    lateinit var prefHandler: PrefHandler
+    lateinit var picasso: Picasso
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        MyApplication.getInstance().appComponent.inject(this)
+        (requireActivity().applicationContext as MyApplication).appComponent.inject(this)
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val li = LayoutInflater.from(activity)
-        dialogView = li.inflate(R.layout.transaction_detail, null)
-        _binding = TransactionDetailBinding.bind(dialogView)
+        val builder = initBuilderWithBinding {
+            TransactionDetailBinding.inflate(materialLayoutInflater).also { _binding = it }
+        }
         val viewModel = ViewModelProvider(this).get(TransactionDetailViewModel::class.java)
         val rowId = requireArguments().getLong(DatabaseConstants.KEY_ROWID)
-        viewModel.transaction(rowId).observe(this, Observer { o -> fillData(o) })
-        viewModel.getTags().observe(this, Observer { tags ->
+        viewModel.transaction(rowId).observe(this, { o -> fillData(o) })
+        viewModel.getTags().observe(this, { tags ->
             if (tags.size > 0) {
                 binding.TagGroup.addChipsBulk(tags, null)
             } else {
@@ -93,9 +90,7 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
             }
         })
         viewModel.loadOriginalTags(rowId, TransactionProvider.TRANSACTIONS_TAGS_URI, DatabaseConstants.KEY_TRANSACTIONID)
-        val alertDialog = AlertDialog.Builder(requireActivity())
-                .setTitle(R.string.progress_dialog_loading) //.setIcon(android.R.color.transparent)
-                .setView(dialogView)
+        val alertDialog = builder.setTitle(R.string.progress_dialog_loading) //.setIcon(android.R.color.transparent)
                 .setNegativeButton(android.R.string.ok, this)
                 .setPositiveButton(R.string.menu_edit, null)
                 .setNeutralButton(R.string.menu_view_picture, this)
@@ -107,19 +102,16 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
                     (dialog as AlertDialog).getButton(AlertDialog.BUTTON_NEUTRAL)?.let { it.visibility = View.GONE }
                 }
                 //prevent automatic dismiss on button click
-                alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { v: View? -> onClick(alertDialog, AlertDialog.BUTTON_POSITIVE) }
+                alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { onClick(alertDialog, AlertDialog.BUTTON_POSITIVE) }
             }
         })
         return alertDialog
     }
 
     override fun onClick(dialog: DialogInterface, which: Int) {
-        val ctx: Activity? = activity
-        if (ctx == null) {
-            return
-        }
-        transactionData?.takeIf { it.size > 0 }?.let {
-            val transaction = it[0]
+        val ctx: FragmentActivity = activity ?: return
+        transactionData?.takeIf { it.isNotEmpty() }?.let { list ->
+            val transaction = list[0]
             when (which) {
                 AlertDialog.BUTTON_POSITIVE -> {
                     if (transaction.isTransfer && transaction.hasTransferPeerParent) {
@@ -129,7 +121,7 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
                     dismiss()
                     val i = Intent(ctx, ExpenseEdit::class.java)
                     i.putExtra(DatabaseConstants.KEY_ROWID, transaction.id)
-                    ctx.startActivityForResult(i, ProtectedFragmentActivity.EDIT_REQUEST)
+                    ctx.startActivityForResult(i, EDIT_REQUEST)
                 }
                 AlertDialog.BUTTON_NEUTRAL -> {
                     transaction.pictureUri?.let {
@@ -141,10 +133,10 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
         }
     }
 
-    fun fillData(list: List<Transaction>) {
+    private fun fillData(list: List<Transaction>) {
         transactionData = list
         (dialog as? AlertDialog)?.let { dlg ->
-            if (list.size > 0) {
+            if (list.isNotEmpty()) {
                 val transaction = list[0]
                 binding.progress.visibility = View.GONE
                 var doShowPicture = false
@@ -174,19 +166,23 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
                 binding.Table.visibility = View.VISIBLE
                 val title: Int
                 val isIncome = transaction.amount.amountMinor > 0
-                if (transaction.isSplit) {
-                    binding.SplitContainer.visibility = View.VISIBLE
-                    title = R.string.split_transaction
-                    SplitPartRVAdapter(requireContext(), transaction.amount.currencyUnit, currencyFormatter, list.subList(1, list.size)).also {
-                        binding.splitList.adapter = it
-                        it.notifyDataSetChanged()
+                when {
+                    transaction.isSplit -> {
+                        binding.SplitContainer.visibility = View.VISIBLE
+                        title = R.string.split_transaction
+                        SplitPartRVAdapter(requireContext(), transaction.amount.currencyUnit, currencyFormatter, list.subList(1, list.size)).also {
+                            binding.splitList.adapter = it
+                            it.notifyDataSetChanged()
+                        }
                     }
-                } else if (transaction.isTransfer) {
-                    title = R.string.transfer
-                    binding.AccountLabel.setText(R.string.transfer_from_account)
-                    binding.CategoryLabel.setText(R.string.transfer_to_account)
-                } else {
-                    title = if (isIncome) R.string.income else R.string.expense
+                    transaction.isTransfer -> {
+                        title = R.string.transfer
+                        binding.AccountLabel.setText(R.string.transfer_from_account)
+                        binding.CategoryLabel.setText(R.string.transfer_to_account)
+                    }
+                    else -> {
+                        title = if (isIncome) R.string.income else R.string.expense
+                    }
                 }
                 val amountText: String
                 if (transaction.isTransfer) {
@@ -213,7 +209,7 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
                     binding.OriginalAmountRow.visibility = View.VISIBLE
                     binding.OriginalAmount.text = formatCurrencyAbs(it)
                 }
-                if (!transaction.isTransfer && transaction.amount.currencyUnit.code() != Utils.getHomeCurrency().code()) {
+                if (!transaction.isTransfer && transaction.amount.currencyUnit.code != Utils.getHomeCurrency().code) {
                     binding.EquivalentAmountRow.visibility = View.VISIBLE
                     binding.EquivalentAmount.text = formatCurrencyAbs(transaction.equivalentAmount)
                 }
@@ -263,7 +259,7 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
                     binding.PlanRow.visibility = View.GONE
                 } else {
                     binding.Plan.text = transaction.originTemplate.plan?.let {
-                        Plan.prettyTimeInfo(activity, it.rrule, it.dtstart)
+                        Plan.prettyTimeInfo(requireContext(), it.rRule, it.dtStart)
                     } ?: getString(R.string.plan_event_deleted)
                 }
                 dlg.setTitle(title)
@@ -271,7 +267,7 @@ class TransactionDetailFragment : CommitSafeDialogFragment(), DialogInterface.On
                     dlg.window?.findViewById<ImageView>(android.R.id.icon)?.let { image ->
                         image.visibility = View.VISIBLE
                         image.scaleType = ImageView.ScaleType.CENTER_CROP
-                        Picasso.get().load(transaction.pictureUri).fit().into(image)
+                        picasso.load(transaction.pictureUri).fit().into(image)
                     }
                 }
             } else {

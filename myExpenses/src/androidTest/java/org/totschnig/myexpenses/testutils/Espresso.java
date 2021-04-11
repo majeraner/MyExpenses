@@ -14,6 +14,7 @@ import androidx.test.espresso.ViewAction;
 import androidx.test.espresso.matcher.ViewMatchers;
 import androidx.test.espresso.util.HumanReadables;
 import androidx.test.espresso.util.TreeIterables;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
@@ -33,14 +34,15 @@ import static org.hamcrest.Matchers.endsWith;
 
 public class Espresso {
 
-  public static void openActionBarOverflowOrOptionsMenu(Context context, boolean isCab) {
+  public static void openActionBarOverflowMenu(boolean isCab) {
+    Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
     onView(isRoot()).perform(new TransitionBridgingViewAction());
 
     onView(isCab ? localizedContextualOverFlowButtonMatcher(context) : localizedOverFlowButtonMatcher(context)).perform(click());
   }
 
-  public static void openActionBarOverflowOrOptionsMenu(Context context) {
-    openActionBarOverflowOrOptionsMenu(context, false);
+  public static void openActionBarOverflowMenu() {
+    openActionBarOverflowMenu(false);
   }
 
   public static void checkEffectiveVisible(int... viewIds) {
@@ -92,12 +94,12 @@ public class Espresso {
     }
   }
 
-  private static final Matcher<View> localizedContextualOverFlowButtonMatcher(Context context) {
+  private static Matcher<View> localizedContextualOverFlowButtonMatcher(Context context) {
     return allOf(localizedOverFlowButtonMatcher(context), isDescendantOfA(withClassName(endsWith("ActionBarContextView"))));
   }
 
   @SuppressLint("PrivateResource")
-  private static final Matcher<View> localizedOverFlowButtonMatcher(Context context) {
+  private static Matcher<View> localizedOverFlowButtonMatcher(Context context) {
     return anyOf(
         allOf(isDisplayed(), withContentDescription(context.getString(
             androidx.appcompat.R.string.abc_action_menu_overflow_description))),
@@ -106,14 +108,15 @@ public class Espresso {
 
   public static ViewAction wait(Matcher<View> viewMatcher, final long millis) {
     return new ViewAction() {
+
       @Override
       public Matcher<View> getConstraints() {
-        return isRoot();
+        return isDisplayed();
       }
 
       @Override
       public String getDescription() {
-        return "wait for a specific view <" + viewMatcher.toString() + "> during " + millis + " millis.";
+        return "wait for matcher <" + viewMatcher.toString() + "> during " + millis + " millis.";
       }
 
       @Override
@@ -123,11 +126,8 @@ public class Espresso {
         final long endTime = startTime + millis;
 
         do {
-          for (View child : TreeIterables.breadthFirstViewTraversal(view)) {
-            // found view with required ID
-            if (viewMatcher.matches(child)) {
-              return;
-            }
+          if (viewMatcher.matches(view)) {
+            return;
           }
 
           uiController.loopMainThreadForAtLeast(50);

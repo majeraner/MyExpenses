@@ -22,6 +22,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.drawable.InsetDrawable;
 import android.os.Build;
@@ -57,6 +58,7 @@ import org.totschnig.myexpenses.provider.TransactionDatabase;
 import org.totschnig.myexpenses.provider.filter.WhereFilter;
 import org.totschnig.myexpenses.task.GrisbiImportTask;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
+import org.totschnig.myexpenses.util.distrib.DistributionHelper;
 import org.totschnig.myexpenses.util.licence.LicenceStatus;
 import org.xml.sax.SAXException;
 import org.xmlpull.v1.XmlPullParser;
@@ -89,6 +91,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.util.Pair;
 import androidx.loader.app.LoaderManager;
+import androidx.loader.content.Loader;
 import timber.log.Timber;
 
 import static android.text.format.DateUtils.DAY_IN_MILLIS;
@@ -106,9 +109,8 @@ public class Utils {
   }
 
   @Nullable
-  public static String getCountryFromTelephonyManager() {
-    TelephonyManager telephonyManager = (TelephonyManager) MyApplication.getInstance()
-        .getSystemService(Context.TELEPHONY_SERVICE);
+  public static String getCountryFromTelephonyManager(Context context) {
+    TelephonyManager telephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
     if (telephonyManager != null) {
       try {
         String userCountry = telephonyManager.getNetworkCountryIso();
@@ -124,20 +126,21 @@ public class Utils {
 
   public static CurrencyUnit getHomeCurrency() {
     //TODO provide home currency in a cleaner way
-    AppComponent appComponent = MyApplication.getInstance().getAppComponent();
+    final MyApplication context = MyApplication.getInstance();
+    AppComponent appComponent = context.getAppComponent();
     String home = appComponent.prefHandler().getString(PrefKey.HOME_CURRENCY, null);
     final CurrencyContext currencyContext = appComponent.currencyContext();
-    return currencyContext.get(home != null ? home : getLocalCurrency().getCurrencyCode());
+    return currencyContext.get(home != null ? home : getLocalCurrency(context).getCurrencyCode());
   }
 
   public static double adjustExchangeRate(double raw, CurrencyUnit currencyUnit) {
-    int minorUnitDelta = currencyUnit.fractionDigits() - Utils.getHomeCurrency().fractionDigits();
+    int minorUnitDelta = currencyUnit.getFractionDigits() - Utils.getHomeCurrency().getFractionDigits();
     return raw * Math.pow(10, minorUnitDelta);
   }
 
-  private static Currency getLocalCurrency() {
+  private static Currency getLocalCurrency(Context context) {
     Currency result = null;
-    String userCountry = getCountryFromTelephonyManager();
+    String userCountry = getCountryFromTelephonyManager(context);
     if (!TextUtils.isEmpty(userCountry)) {
       try {
         result = Currency.getInstance(new Locale("", userCountry));
@@ -152,8 +155,13 @@ public class Utils {
 
   public static List<Map<String, String>> getProjectDependencies(Context context) {
     List<Map<String, String>> result = new ArrayList<>();
-    XmlPullParser xpp = context.getResources().getXml(R.xml.project_dependencies);
-    int eventType = 0;
+    addProjectDependencies(result, context.getResources().getXml(R.xml.project_dependencies));
+    addProjectDependencies(result, context.getResources().getXml(R.xml.additional_dependencies));
+    return result;
+  }
+
+  private static void addProjectDependencies(List<Map<String, String>> result, XmlPullParser xpp) {
+    int eventType;
     try {
       eventType = xpp.getEventType();
       Map<String, String> project = null;
@@ -175,15 +183,6 @@ public class Utils {
       }
     } catch (Exception e) {
       Timber.e(e);
-    }
-    return result;
-  }
-
-  public enum Feature {
-    ;
-
-    public boolean isEnabled() {
-      return true;
     }
   }
 
@@ -232,9 +231,7 @@ public class Utils {
   }
 
   /**
-   * @param currency
-   * @param separator
-   * @return a Decimalformat with the number of fraction digits appropriate for
+   * @return a DecimalFormat with the number of fraction digits appropriate for
    * currency, and with the given separator, but without the currency
    * symbol appropriate for CSV and QIF export
    */
@@ -244,7 +241,7 @@ public class Utils {
     DecimalFormatSymbols symbols = new DecimalFormatSymbols();
     symbols.setDecimalSeparator(separator);
     nf.setDecimalFormatSymbols(symbols);
-    int fractionDigits = currency.fractionDigits();
+    int fractionDigits = currency.getFractionDigits();
     nf.setMinimumFractionDigits(fractionDigits);
     nf.setMaximumFractionDigits(fractionDigits);
     nf.setGroupingUsed(false);
@@ -252,10 +249,8 @@ public class Utils {
   }
 
   /**
-   * utility method that calls formatters for date
-   *
-   * @param text
-   * @return formated string
+   * utility method that calls formatter for date
+   * @return formatted string
    */
   public static String convDate(String text, DateFormat format) {
     Date date = dateFromSQL(text);
@@ -266,10 +261,10 @@ public class Utils {
   }
 
   /**
-   * utility method that calls formatters for date
+   * utility method that calls formatter for date
    *
    * @param date unixEpoch
-   * @return formated string
+   * @return formatted string
    */
   public static String convDateTime(long date, DateFormat format) {
     return format.format(new Date(date * 1000L));
@@ -380,12 +375,11 @@ public class Utils {
       // Create MD5 Hash
       MessageDigest digest = java.security.MessageDigest.getInstance("MD5");
       digest.update(s.getBytes());
-      byte messageDigest[] = digest.digest();
+      byte[] messageDigest = digest.digest();
 
       // Create Hex String
-      StringBuffer hexString = new StringBuffer();
-      for (int i = 0; i < messageDigest.length; i++)
-        hexString.append(Integer.toHexString(0xFF & messageDigest[i]));
+      StringBuilder hexString = new StringBuilder();
+      for (byte b : messageDigest) hexString.append(Integer.toHexString(0xFF & b));
       return hexString.toString();
 
     } catch (NoSuchAlgorithmException e) {
@@ -398,9 +392,6 @@ public class Utils {
    * Credit:
    * https://groups.google.com/forum/?fromgroups#!topic/actionbarsherlock
    * /Z8Ic8djq-3o
-   *
-   * @param item
-   * @param enabled
    */
   public static void menuItemSetEnabledAndVisible(@NonNull MenuItem item, boolean enabled) {
     item.setEnabled(enabled).setVisible(enabled);
@@ -416,49 +407,54 @@ public class Utils {
     return true;
   }
 
-  @SuppressLint("SimpleDateFormat")
-  public static DateFormat getDateFormatSafe(Context context) {
-    String custom = ((MyApplication) context.getApplicationContext()).getAppComponent().prefHandler().getString(PrefKey.CUSTOM_DATE_FORMAT,"");
-    if (!"".equals(custom)) {
-      try {
-        return new SimpleDateFormat(custom);
-      } catch (Exception e) {
-        Timber.e(e);
-      }
-    }
+  public static DateFormat getFrameworkDateFormatSafe(Context context) {
     try {
       return android.text.format.DateFormat.getDateFormat(context);
     } catch (Exception e) {
       CrashHandler.report(e);
       //java.lang.SecurityException: Requires READ_PHONE_STATE observed on HUAWEI Y625-U13
-      return java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT);
+      return java.text.DateFormat.getDateInstance(DateFormat.SHORT, localeFromContext(context));
     }
   }
 
-  public static DateFormat localizedYearlessDateFormat(Context context) {
-    Locale l = Locale.getDefault();
+  @SuppressLint("SimpleDateFormat")
+  public static DateFormat getDateFormatSafe(Context context) {
+    String custom = ((MyApplication) context.getApplicationContext()).getAppComponent().prefHandler().getString(PrefKey.CUSTOM_DATE_FORMAT,"");
+    if (!"".equals(custom)) {
+      try {
+        return new SimpleDateFormat(custom, localeFromContext(context));
+      } catch (Exception e) {
+        Timber.e(e);
+      }
+    }
+    return getFrameworkDateFormatSafe(context);
+  }
+
+  public static DateFormat localizedYearLessDateFormat(Context context) {
     DateFormat dateFormat = getDateFormatSafe(context);
     if (dateFormat instanceof SimpleDateFormat) {
       final String contextPattern = ((SimpleDateFormat) dateFormat).toPattern();
-      String yearlessPattern = contextPattern.replaceAll("\\W?[Yy]+\\W?", "");
-      return new SimpleDateFormat(yearlessPattern, l);
+      String yearLessPattern = contextPattern.replaceAll("\\W?[Yy]+\\W?", "");
+      return new SimpleDateFormat(yearLessPattern, localeFromContext(context));
     } else {
       return dateFormat;
     }
   }
 
+  public static Locale localeFromContext(Context context) {
+    return context.getResources().getConfiguration().locale;
+  }
+
   /**
-   * @param context
    * @return Locale en-CA has "y-MM-dd" (2019-06-18) as short date format, which does not fit into
    * the space, we allocate for dates when transactions are not grouped, we replace the year part with "yy"
    */
   public static DateFormat ensureDateFormatWithShortYear(Context context) {
-    Locale l = Locale.getDefault();
     DateFormat dateFormat = getDateFormatSafe(context);
     if (dateFormat instanceof SimpleDateFormat) {
       final String contextPattern = ((SimpleDateFormat) dateFormat).toPattern();
       String shortPattern = contextPattern.replaceAll("y+", "yy");
-      return new SimpleDateFormat(shortPattern, l);
+      return new SimpleDateFormat(shortPattern, localeFromContext(context));
     } else {
       return dateFormat;
     }
@@ -563,7 +559,6 @@ public class Utils {
   }
 
   /**
-   * @param str
    * @return a representation of str converted to lower case, Unicode
    * normalization applied and markers removed this allows
    * case-insensitive comparison for non-ascii and non-latin strings
@@ -576,7 +571,7 @@ public class Utils {
         "");
   }
 
-  public static String esacapeSqlLikeExpression(String str) {
+  public static String escapeSqlLikeExpression(String str) {
     return str
         .replace(WhereFilter.LIKE_ESCAPE_CHAR,
             WhereFilter.LIKE_ESCAPE_CHAR + WhereFilter.LIKE_ESCAPE_CHAR)
@@ -599,10 +594,7 @@ public class Utils {
 
   /**
    * filters out the '/' character and characters of type {@link Character#SURROGATE} or
-   * {@link java.lang.Character#OTHER_SYMBOL}, meant primarily to skip emojs
-   *
-   * @param in
-   * @return
+   * {@link java.lang.Character#OTHER_SYMBOL}, meant primarily to skip emojis
    */
   public static String escapeForFileName(String in) {
     return in.replace("/", "").replaceAll("\\p{Cs}", "").replaceAll("\\p{So}", "");
@@ -642,48 +634,44 @@ public class Utils {
 
   public static void configureSortDirectionMenu(SubMenu subMenu, SortDirection currentSortDirection) {
     MenuItem activeItem;
-    switch (currentSortDirection) {
-      case ASC:
-        activeItem = subMenu.findItem(R.id.SORT_DIRECTION_ASCENDING_COMMAND);
-        break;
-      default:
-        activeItem = subMenu.findItem(R.id.SORT_DIRECTION_DESCENDING_COMMAND);
-        break;
+    if (currentSortDirection == SortDirection.ASC) {
+      activeItem = subMenu.findItem(R.id.SORT_DIRECTION_ASCENDING_COMMAND);
+    } else {
+      activeItem = subMenu.findItem(R.id.SORT_DIRECTION_DESCENDING_COMMAND);
     }
     activeItem.setChecked(true);
   }
 
   @Nullable
   public static Grouping getGroupingFromMenuItemId(int id) {
-    switch (id) {
-      case R.id.GROUPING_NONE_COMMAND:
-        return Grouping.NONE;
-      case R.id.GROUPING_DAY_COMMAND:
-        return Grouping.DAY;
-      case R.id.GROUPING_WEEK_COMMAND:
-        return Grouping.WEEK;
-      case R.id.GROUPING_MONTH_COMMAND:
-        return Grouping.MONTH;
-      case R.id.GROUPING_YEAR_COMMAND:
-        return Grouping.YEAR;
+    if (id == R.id.GROUPING_NONE_COMMAND) {
+      return Grouping.NONE;
+    } else if (id == R.id.GROUPING_DAY_COMMAND) {
+      return Grouping.DAY;
+    } else if (id == R.id.GROUPING_WEEK_COMMAND) {
+      return Grouping.WEEK;
+    } else if (id == R.id.GROUPING_MONTH_COMMAND) {
+      return Grouping.MONTH;
+    } else if (id == R.id.GROUPING_YEAR_COMMAND) {
+      return Grouping.YEAR;
     }
     return null;
   }
 
   @Nullable
   public static SortDirection getSortDirectionFromMenuItemId(int id) {
-    switch (id) {
-      case R.id.SORT_DIRECTION_DESCENDING_COMMAND:
-        return SortDirection.DESC;
-      case R.id.SORT_DIRECTION_ASCENDING_COMMAND:
-        return SortDirection.ASC;
+    if (id == R.id.SORT_DIRECTION_DESCENDING_COMMAND) {
+      return SortDirection.DESC;
+    } else if (id == R.id.SORT_DIRECTION_ASCENDING_COMMAND) {
+      return SortDirection.ASC;
     }
     return null;
   }
 
   public static void requireLoader(LoaderManager manager, int loaderId, Bundle args,
-                                   LoaderManager.LoaderCallbacks callback) {
-    if (manager.getLoader(loaderId) != null && !manager.getLoader(loaderId).isReset()) {
+                                   LoaderManager.LoaderCallbacks<Cursor> callback) {
+    final Loader<Cursor> loader = manager.getLoader(loaderId);
+    if (loader != null && !loader.isReset()) {
       manager.restartLoader(loaderId, args, callback);
     } else {
       manager.initLoader(loaderId, args, callback);
@@ -693,17 +681,19 @@ public class Utils {
   /**
    * backport of {@link Integer#compare(int, int)} which is API 19
    * returns -1, 0 or 1
+   * TODO remove now desugared
    */
   public static int compare(int lhs, int rhs) {
-    return lhs < rhs ? -1 : (lhs == rhs ? 0 : 1);
+    return Integer.compare(lhs, rhs);
   }
 
   /**
    * backport of {@link Long#compare(long, long)} which is API 19
    * returns -1, 0 or 1
+   * TODO remove now desugared
    */
   public static int compare(long x, long y) {
-    return (x < y) ? -1 : ((x == y) ? 0 : 1);
+    return Long.compare(x, y);
   }
 
   /**
@@ -711,21 +701,6 @@ public class Utils {
    */
   public static <T> int compare(T a, T b, Comparator<? super T> c) {
     return (a == b) ? 0 : c.compare(a, b);
-  }
-
-  // From Guava
-  public static int indexOf(int[] array, int target) {
-    return indexOf(array, target, 0, array.length);
-  }
-
-  private static int indexOf(
-      int[] array, int target, int start, int end) {
-    for (int i = start; i < end; i++) {
-      if (array[i] == target) {
-        return i;
-      }
-    }
-    return -1;
   }
 
   public static int pow(int b, int k) {

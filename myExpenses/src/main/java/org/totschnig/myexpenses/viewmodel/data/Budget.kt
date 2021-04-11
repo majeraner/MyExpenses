@@ -38,7 +38,7 @@ data class Budget(val id: Long, val accountId: Long, val title: String, val desc
 
     fun label(context: Context) = accountName
             ?: if (accountId == Account.HOME_AGGREGATE_ID) context.getString(R.string.grand_total)
-            else currency.code()
+            else currency.code
 
     fun toContentValues() = ContentValues().apply {
         put(KEY_TITLE, title)
@@ -49,7 +49,7 @@ data class Budget(val id: Long, val accountId: Long, val title: String, val desc
             put(KEY_ACCOUNTID, accountId)
             putNull(KEY_CURRENCY)
         } else {
-            put(KEY_CURRENCY, currency.code())
+            put(KEY_CURRENCY, currency.code)
             putNull(KEY_ACCOUNTID)
         }
         if (grouping == Grouping.NONE) {
@@ -61,8 +61,8 @@ data class Budget(val id: Long, val accountId: Long, val title: String, val desc
         }
     }
 
-    fun startIso() = start!!.format(ISO_LOCAL_DATE)
-    fun endIso() = end!!.format(ISO_LOCAL_DATE)
+    private fun startIso(): String = start!!.format(ISO_LOCAL_DATE)
+    private fun endIso(): String = end!!.format(ISO_LOCAL_DATE)
     fun durationAsSqlFilter() = "%1\$s > strftime('%%s', '%2\$s', 'utc') AND %1\$s < strftime('%%s', '%3\$s', 'utc')".format(
             KEY_DATE, startIso(), endIso())
 
@@ -94,7 +94,7 @@ data class Budget(val id: Long, val accountId: Long, val title: String, val desc
 fun Grouping.getLabelForBudgetType() = when (this) {
     Grouping.DAY -> R.string.daily_plain
     Grouping.WEEK -> R.string.weekly_plain
-    Grouping.MONTH -> R.string.monthly
+    Grouping.MONTH -> R.string.monthly_plain
     Grouping.YEAR -> R.string.yearly_plain
     Grouping.NONE -> R.string.budget_onetime
 }

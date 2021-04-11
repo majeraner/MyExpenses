@@ -1,7 +1,6 @@
 package org.totschnig.myexpenses.adapter;
 
 import android.database.Cursor;
-import android.text.Html;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.SimpleCursorAdapter;
@@ -16,6 +15,8 @@ import org.totschnig.myexpenses.model.Transfer;
 import org.totschnig.myexpenses.provider.DbUtils;
 import org.totschnig.myexpenses.util.CurrencyFormatter;
 
+import androidx.core.text.HtmlCompat;
+
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_AMOUNT;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CATID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_COMMENT;
@@ -23,8 +24,6 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_LABEL_SUB;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TRANSFER_ACCOUNT;
 
 public final class SplitPartAdapter extends SimpleCursorAdapter {
-  private final String commentSeparator = " / ";
-  private final String categorySeparator = " : ";
   int colorExpense;
   int colorIncome;
 
@@ -35,7 +34,7 @@ public final class SplitPartAdapter extends SimpleCursorAdapter {
   CurrencyUnit currency;
   boolean insideFragment;
 
-  private CurrencyFormatter currencyFormatter;
+  private final CurrencyFormatter currencyFormatter;
 
   public SplitPartAdapter(ProtectedFragmentActivity context, int layout, Cursor c,
                           String[] from, int[] to, int flags, CurrencyUnit currency,
@@ -44,8 +43,8 @@ public final class SplitPartAdapter extends SimpleCursorAdapter {
     if (context instanceof MyExpenses) {
       insideFragment = true;
     }
-    colorExpense = context.getColorExpense();
-    colorIncome = context.getColorIncome();
+    colorExpense = context.getResources().getColor(R.color.colorExpense);
+    colorIncome = context.getResources().getColor(R.color.colorIncome);
     this.currency = currency;
     this.currencyFormatter = currencyFormatter;
   }
@@ -56,9 +55,8 @@ public final class SplitPartAdapter extends SimpleCursorAdapter {
    */
   @Override
   public void setViewText(TextView v, String text) {
-    switch (v.getId()) {
-      case R.id.amount:
-        text = currencyFormatter.convAmount(text, currency);
+    if (v.getId() == R.id.amount) {
+      text = currencyFormatter.convAmount(text, currency);
     }
     super.setViewText(v, text);
   }
@@ -76,12 +74,7 @@ public final class SplitPartAdapter extends SimpleCursorAdapter {
     c.moveToPosition(position);
     int col = c.getColumnIndex(KEY_AMOUNT);
     long amount = c.getLong(col);
-    if (amount < 0) {
-      tv1.setTextColor(colorExpense);
-      // Set the background color of the text.
-    } else {
-      tv1.setTextColor(colorIncome);
-    }
+    tv1.setTextColor(amount < 0 ? colorExpense : colorIncome);
     TextView tv2 = (TextView) row.findViewById(R.id.category);
     //should not be needed, even harmful //TODO check
     /*if (insideFragment && Build.VERSION.SDK_INT < 11) {
@@ -98,6 +91,7 @@ public final class SplitPartAdapter extends SimpleCursorAdapter {
         col = c.getColumnIndex(KEY_LABEL_SUB);
         String label_sub = c.getString(col);
         if (label_sub != null && label_sub.length() > 0) {
+          String categorySeparator = " : ";
           catText += categorySeparator + label_sub;
         }
       }
@@ -105,9 +99,10 @@ public final class SplitPartAdapter extends SimpleCursorAdapter {
     col = c.getColumnIndex(KEY_COMMENT);
     String comment = c.getString(col);
     if (comment != null && comment.length() > 0) {
+      String commentSeparator = " / ";
       catText += (catText.equals("") ? "" : commentSeparator) + "<i>" + comment + "</i>";
     }
-    tv2.setText(Html.fromHtml(catText));
+    tv2.setText(HtmlCompat.fromHtml(catText, HtmlCompat.FROM_HTML_MODE_LEGACY));
     return row;
   }
 }

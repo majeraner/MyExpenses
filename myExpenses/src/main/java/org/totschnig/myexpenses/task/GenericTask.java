@@ -10,7 +10,6 @@ import android.content.Context;
 import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteConstraintException;
-import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -25,9 +24,10 @@ import com.annimon.stream.Stream;
 
 import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.fragment.CategoryList;
+import org.totschnig.myexpenses.fragment.AbstractCategoryList;
 import org.totschnig.myexpenses.model.Account;
 import org.totschnig.myexpenses.model.Category;
+import org.totschnig.myexpenses.model.ExportFormat;
 import org.totschnig.myexpenses.model.Payee;
 import org.totschnig.myexpenses.model.PaymentMethod;
 import org.totschnig.myexpenses.model.Plan;
@@ -36,7 +36,6 @@ import org.totschnig.myexpenses.model.Transaction;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.provider.DbUtils;
-import org.totschnig.myexpenses.provider.TransactionDatabase;
 import org.totschnig.myexpenses.provider.TransactionProvider;
 import org.totschnig.myexpenses.provider.filter.WhereFilter;
 import org.totschnig.myexpenses.sync.GenericAccountService;
@@ -45,6 +44,7 @@ import org.totschnig.myexpenses.sync.SyncAdapter;
 import org.totschnig.myexpenses.sync.SyncBackendProvider;
 import org.totschnig.myexpenses.sync.SyncBackendProviderFactory;
 import org.totschnig.myexpenses.sync.json.AccountMetaData;
+import org.totschnig.myexpenses.ui.ContextHelper;
 import org.totschnig.myexpenses.util.AppDirHelper;
 import org.totschnig.myexpenses.util.BackupUtils;
 import org.totschnig.myexpenses.util.Result;
@@ -59,11 +59,9 @@ import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 
 import androidx.annotation.NonNull;
-import androidx.core.util.Pair;
 import androidx.documentfile.provider.DocumentFile;
 import timber.log.Timber;
 
@@ -117,24 +115,27 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
   protected Object doInBackground(T... ids) {
     Long transactionId;
     Long[][] extraInfo2d;
-    MyApplication application = MyApplication.getInstance();
-    ContentResolver cr = application.getContentResolver();
+    final MyApplication application = MyApplication.getInstance();
+    final Context context = ContextHelper.wrap(application, application.getAppComponent().userLocaleProvider().getUserPreferredLocale());
+    ContentResolver cr = context.getContentResolver();
     ContentValues values;
     Cursor c;
     int successCount = 0, failureCount = 0;
     switch (mTaskId) {
       case TaskExecutionFragment.TASK_NEW_FROM_TEMPLATE:
         for (int i = 0; i < ids.length; i++) {
-          Pair<Transaction, List<Tag>> pair = Transaction.getInstanceFromTemplate((Long) ids[i]);
-          Transaction t = pair.first;
+          kotlin.Pair<Transaction, List<Tag>> pair = Transaction.getInstanceFromTemplateWithTags((Long) ids[i]);
+          Transaction t = pair.getFirst();
           if (t != null) {
             if (mExtra != null) {
               extraInfo2d = (Long[][]) mExtra;
-              t.setDate(new Date(extraInfo2d[i][1]));
-              t.originPlanInstanceId = extraInfo2d[i][0];
+              final long date = extraInfo2d[i][1] / 1000;
+              t.setDate(date);
+              t.setValueDate(date);
+              t.setOriginPlanInstanceId(extraInfo2d[i][0]);
             }
             t.setStatus(STATUS_NONE);
-            if (t.save(true) != null && t.saveTags(pair.second, cr)) {
+            if (t.save(true) != null && t.saveTags(pair.getSecond(), cr)) {
               successCount++;
             }
           }
@@ -192,8 +193,8 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
       case TaskExecutionFragment.TASK_DELETE_CATEGORY:
         try (Cursor cursor = cr.query(TransactionProvider.CATEGORIES_URI,
             new String[]{KEY_ROWID,
-                "(select 1 FROM " + TABLE_TRANSACTIONS + " WHERE " + CategoryList.CATTREE_WHERE_CLAUSE + ") AS " + DatabaseConstants.KEY_MAPPED_TRANSACTIONS,
-                "(select 1 FROM " + TABLE_TEMPLATES + " WHERE " + CategoryList.CATTREE_WHERE_CLAUSE + ") AS " + DatabaseConstants.KEY_MAPPED_TEMPLATES
+                "(select 1 FROM " + TABLE_TRANSACTIONS + " WHERE " + AbstractCategoryList.CAT_TREE_WHERE_CLAUSE + ") AS " + DatabaseConstants.KEY_MAPPED_TRANSACTIONS,
+                "(select 1 FROM " + TABLE_TEMPLATES + " WHERE " + AbstractCategoryList.CAT_TREE_WHERE_CLAUSE + ") AS " + DatabaseConstants.KEY_MAPPED_TEMPLATES
             }, DatabaseConstants.KEY_ROWID + " " + WhereFilter.Operation.IN.getOp(ids.length), Stream.of(((Long[]) ids)).map(String::valueOf).toArray(String[]::new), null)) {
           if (cursor == null) return Result.ofFailure("Cursor is null");
           int deleted = 0, mappedToTransaction = 0, mappedToTemplate = 0;
@@ -216,16 +217,16 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
             }
             List<String> messages = new ArrayList<>();
             if (deleted > 0) {
-              messages.add(application.getResources().getQuantityString(R.plurals.delete_success, deleted, deleted));
+              messages.add(context.getResources().getQuantityString(R.plurals.delete_success, deleted, deleted));
             }
             if (mappedToTransaction > 0) {
-              messages.add(application.getResources().getQuantityString(
+              messages.add(context.getResources().getQuantityString(
                   R.plurals.not_deletable_mapped_transactions,
                   mappedToTransaction,
                   mappedToTransaction));
             }
             if (mappedToTemplate > 0) {
-              messages.add(application.getResources().getQuantityString(
+              messages.add(context.getResources().getQuantityString(
                   R.plurals.not_deletable_mapped_templates,
                   mappedToTemplate,
                   mappedToTemplate));
@@ -279,13 +280,13 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         }
         String resultMsg = "";
         if (successCount > 0) {
-          resultMsg += application.getResources().getQuantityString(R.plurals.move_category_success, successCount, successCount);
+          resultMsg += context.getResources().getQuantityString(R.plurals.move_category_success, successCount, successCount);
         }
         if (failureCount > 0) {
           if (!TextUtils.isEmpty(resultMsg)) {
             resultMsg += " ";
           }
-          resultMsg += application.getResources().getQuantityString(R.plurals.move_category_failure, failureCount, failureCount);
+          resultMsg += context.getResources().getQuantityString(R.plurals.move_category_failure, failureCount, failureCount);
         }
         return successCount > 0 ? Result.ofSuccess(resultMsg) : Result.ofFailure(resultMsg);
       case TaskExecutionFragment.TASK_CANCEL_PLAN_INSTANCE:
@@ -296,9 +297,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
           if (transactionId != null && transactionId > 0L) {
             Transaction.delete(transactionId, false);
           } else {
-            cr.delete(TransactionProvider.PLAN_INSTANCE_STATUS_URI,
-                KEY_INSTANCEID + " = ? AND " + KEY_TEMPLATEID + " = ?",
-                new String[]{String.valueOf(ids[i]), String.valueOf(templateId)});
+            cr.delete(TransactionProvider.PLAN_INSTANCE_SINGLE_URI(templateId, (Long) ids[i]), null, null);
           }
           values = new ContentValues();
           values.putNull(KEY_TRANSACTIONID);
@@ -315,13 +314,11 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
           if (transactionId != null && transactionId > 0L) {
             Transaction.delete(transactionId, false);
           }
-          cr.delete(TransactionProvider.PLAN_INSTANCE_STATUS_URI,
-              KEY_INSTANCEID + " = ? AND " + KEY_TEMPLATEID + " = ?",
-              new String[]{String.valueOf(ids[i]), String.valueOf(templateId)});
+          cr.delete(TransactionProvider.PLAN_INSTANCE_SINGLE_URI(templateId, (Long) ids[i]), null, null);
         }
         return null;
       case TaskExecutionFragment.TASK_BACKUP:
-        return BackupUtils.doBackup(((String) mExtra));
+        return BackupUtils.doBackup(((String) mExtra), context);
       case TaskExecutionFragment.TASK_BALANCE:
         return Account.getInstanceFromDb((Long) ids[0]).balance((Boolean) mExtra);
       case TaskExecutionFragment.TASK_UPDATE_SORT_KEY:
@@ -370,7 +367,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         return null;
       }
       case TaskExecutionFragment.TASK_SAVE_IMAGES: {
-        File staleFileDir = new File(application.getExternalFilesDir(null), "images.old");
+        File staleFileDir = new File(context.getExternalFilesDir(null), "images.old");
         staleFileDir.mkdir();
         if (!staleFileDir.isDirectory()) {
           return null;
@@ -416,7 +413,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         return null;
       }
       case TaskExecutionFragment.TASK_EXPORT_CATEGORIES:
-        DocumentFile appDir = AppDirHelper.getAppDir(application);
+        DocumentFile appDir = AppDirHelper.getAppDir(context);
         if (appDir == null) {
           return Result.ofFailure(R.string.external_storage_unavailable);
         }
@@ -437,12 +434,12 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         DocumentFile outputFile = AppDirHelper.timeStampedFile(
             appDir,
             fileName,
-            "text/qif", null);
+            ExportFormat.QIF.getMimeType(), null);
         if (outputFile == null) {
           return Result.ofFailure(
               R.string.io_error_unable_to_create_file,
               fileName,
-              FileUtils.getPath(application, appDir.getUri()));
+              FileUtils.getPath(context, appDir.getUri()));
         }
         try {
           OutputStreamWriter out = new OutputStreamWriter(
@@ -469,7 +466,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
           }
           c.close();
           out.close();
-          return Result.ofSuccess(R.string.export_sdcard_success, outputFile.getUri(), FileUtils.getPath(application, outputFile.getUri()));
+          return Result.ofSuccess(R.string.export_sdcard_success, outputFile.getUri(), FileUtils.getPath(context, outputFile.getUri()));
         } catch (IOException e) {
           return Result.ofFailure(R.string.export_sdcard_failure,
               appDir.getName(), e.getMessage());
@@ -535,8 +532,8 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         if (syncAccountName == null) {
           return Result.FAILURE;
         }
-        AccountManager accountManager = AccountManager.get(application);
-        android.accounts.Account syncAccount = GenericAccountService.GetAccount(syncAccountName);
+        AccountManager accountManager = AccountManager.get(context);
+        android.accounts.Account syncAccount = GenericAccountService.getAccount(syncAccountName);
         accountManager.setUserData(syncAccount, SyncAdapter.KEY_LAST_SYNCED_LOCAL(account.getId()), null);
         accountManager.setUserData(syncAccount, SyncAdapter.KEY_LAST_SYNCED_REMOTE(account.getId()), null);
         account.setSyncAccountName(null);
@@ -553,24 +550,24 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         Bundle bundle = new Bundle();
         bundle.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
         bundle.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
-        bundle.putString(KEY_UUID, account.uuid);
+        bundle.putString(KEY_UUID, account.getUuid());
         bundle.putBoolean(SyncAdapter.KEY_RESET_REMOTE_ACCOUNT, true);
-        ContentResolver.requestSync(GenericAccountService.GetAccount(syncAccountName),
+        ContentResolver.requestSync(GenericAccountService.getAccount(syncAccountName),
             TransactionProvider.AUTHORITY, bundle);
         account.save();
         return Result.SUCCESS;
       }
       case TaskExecutionFragment.TASK_SYNC_LINK_REMOTE: {
         Account remoteAccount = (Account) this.mExtra;
-        if (!deleteAccount(Account.findByUuid(remoteAccount.uuid))) {
+        if (!deleteAccount(Account.findByUuid(remoteAccount.getUuid()))) {
           return Result.FAILURE;
         }
         remoteAccount.save();
         return Result.SUCCESS;
       }
       case TaskExecutionFragment.TASK_SYNC_REMOVE_BACKEND: {
-        AccountManagerFuture<Boolean> accountManagerFuture = AccountManager.get(application).removeAccount(
-            GenericAccountService.GetAccount((String) ids[0]), null, null);
+        AccountManagerFuture<Boolean> accountManagerFuture = AccountManager.get(context).removeAccount(
+            GenericAccountService.getAccount((String) ids[0]), null, null);
         try {
           return accountManagerFuture.getResult() ? Result.SUCCESS : Result.FAILURE;
         } catch (OperationCanceledException | AuthenticatorException | IOException e) {
@@ -624,12 +621,12 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         c.close();
         String message = "";
         if (result > 0) {
-          message = application.getString(R.string.link_account_success, result);
+          message = context.getString(R.string.link_account_success, result);
         }
         if (requested > result) {
-          message += " " + application.getString(R.string.link_account_failure_1, requested - result)
-              + " " + application.getString(R.string.link_account_failure_2)
-              + " " + application.getString(R.string.link_account_failure_3);
+          message += " " + context.getString(R.string.link_account_failure_1, requested - result)
+              + " " + context.getString(R.string.link_account_failure_2)
+              + " " + context.getString(R.string.link_account_failure_3);
         }
         return requested == result ? Result.ofSuccess(message) : Result.ofFailure(message);
       }
@@ -644,9 +641,9 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
               .filter(Exceptional::isPresent)
               .map(Exceptional::get)
               .anyMatch(metadata -> metadata.uuid().equals(accountUuid))) {
-            return Result.ofFailure(concatResStrings(application, " ",
+            return Result.ofFailure(concatResStrings(context, " ",
                 R.string.link_account_failure_2, R.string.link_account_failure_3)
-                + "(" + concatResStrings(application, ", ", R.string.menu_settings,
+                + "(" + concatResStrings(context, ", ", R.string.menu_settings,
                 R.string.pref_manage_sync_backends_title) + ")");
           }
           return Result.SUCCESS;
@@ -655,30 +652,6 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
         } finally {
           syncBackendProvider.get().tearDown();
         }
-      }
-      case TaskExecutionFragment.TASK_INIT: {
-        for (SyncBackendProviderFactory factory : ServiceLoader.load(application)) {
-          factory.init();
-        }
-        try {
-          cr.call(TransactionProvider.DUAL_URI, TransactionProvider.METHOD_INIT, null, null);
-        } catch (TransactionDatabase.SQLiteDowngradeFailedException |
-            TransactionDatabase.SQLiteUpgradeFailedException e) {
-          CrashHandler.report(e);
-          String msg = e instanceof TransactionDatabase.SQLiteDowngradeFailedException ?
-              ("Database cannot be downgraded from a newer version. Please either uninstall MyExpenses, " +
-                  "before reinstalling, or upgrade to a new version.") :
-              "Database upgrade failed. Please contact support@myexpenses.mobi !";
-          return Result.ofFailure(msg);
-        } catch (SQLiteException e) {
-          String msg = String.format(
-              "Loading of transactions failed (%s). Probably the sum of the entered amounts exceeds the storage limit !"
-              , e.getMessage());
-          return Result.ofFailure(msg);
-        }
-        application.getLicenceHandler().update();
-        Account.updateTransferShortcut();
-        return Result.SUCCESS;
       }
       case TaskExecutionFragment.TASK_SETUP_FROM_SYNC_ACCOUNTS: {
         String syncAccountName = (String) mExtra;
@@ -704,7 +677,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
             Bundle bundle = new Bundle();
             bundle.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
             bundle.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
-            ContentResolver.requestSync(GenericAccountService.GetAccount(syncAccountName),
+            ContentResolver.requestSync(GenericAccountService.getAccount(syncAccountName),
                 TransactionProvider.AUTHORITY, bundle);
             return Result.SUCCESS;
           }
@@ -716,7 +689,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
       }
       case TaskExecutionFragment.TASK_REPAIR_SYNC_BACKEND: {
         Optional<SyncBackendProviderFactory> syncBackendProviderFactoryOptional =
-            Stream.of(ServiceLoader.load(application)).filter(factory -> factory.getLabel().equals(ids[0])).findFirst();
+            Stream.of(ServiceLoader.load(context)).filter(factory -> factory.getLabel().equals(ids[0])).findFirst();
         if (syncBackendProviderFactoryOptional.isPresent()) {
           return syncBackendProviderFactoryOptional.get().handleRepairTask(mExtra);
         } else {
@@ -749,7 +722,7 @@ public class GenericTask<T> extends AsyncTask<T, Void, Object> {
   private Exceptional<SyncBackendProvider> getSyncBackendProviderFromExtra() {
     String syncAccountName = ((String) mExtra);
     try {
-      final android.accounts.Account account = GenericAccountService.GetAccount(syncAccountName);
+      final android.accounts.Account account = GenericAccountService.getAccount(syncAccountName);
       final Context context = MyApplication.getInstance();
       return Exceptional.of(() -> SyncBackendProviderFactory.get(context, account, false).getOrThrow());
     } catch (Throwable throwable) {

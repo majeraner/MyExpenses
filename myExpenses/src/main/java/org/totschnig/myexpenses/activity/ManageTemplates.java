@@ -20,15 +20,11 @@ import android.net.Uri;
 import android.os.Bundle;
 
 import com.android.calendar.CalendarContractCompat.Events;
-import com.google.android.material.snackbar.Snackbar;
 
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment;
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment.ConfirmationDialogListener;
 import org.totschnig.myexpenses.fragment.TemplatesList;
 import org.totschnig.myexpenses.model.ContribFeature;
-import org.totschnig.myexpenses.preference.PrefKey;
-import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.task.TaskExecutionFragment;
 import org.totschnig.myexpenses.util.PermissionHelper;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
@@ -49,8 +45,6 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
     ConfirmationDialogListener, ContribIFace {
 
   public static final int NOT_CALLED = -1;
-  public static final String TEMPLATE_CLICK_ACTION_SAVE = "SAVE";
-  public static final String TEMPLATE_CLICK_ACTION_EDIT = "EDIT";
   private long calledFromCalendarWithId = NOT_CALLED;
 
   @Override
@@ -62,7 +56,7 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
   private TemplatesList mListFragment;
 
   public enum HelpVariant {
-    templates, plans
+    templates, plans, planner
   }
 
   public long getCalledFromCalendarWithId() {
@@ -71,7 +65,6 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    setTheme(getThemeIdEditDialog());
     super.onCreate(savedInstanceState);
     setHelpVariant(HelpVariant.templates);
     setContentView(R.layout.manage_templates);
@@ -102,24 +95,23 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
       return true;
     }
     Intent i;
-    switch (command) {
-      case R.id.CREATE_COMMAND:
-        i = new Intent(this, ExpenseEdit.class);
-        i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
-        i.putExtra(ExpenseEdit.KEY_NEW_TEMPLATE, true);
-        startActivity(i);
-        return true;
-      case R.id.DELETE_COMMAND_DO:
-        finishActionMode();
-        startTaskExecution(
-            TaskExecutionFragment.TASK_DELETE_TEMPLATES,
-            (Long[]) tag,
-            CALENDAR.hasPermission(this),
-            R.string.progress_dialog_deleting);
-        return true;
-      case R.id.CANCEL_CALLBACK_COMMAND:
-        finishActionMode();
-        return true;
+    if (command == R.id.CREATE_COMMAND) {
+      i = new Intent(this, ExpenseEdit.class);
+      i.putExtra(OPERATION_TYPE, TYPE_TRANSACTION);
+      i.putExtra(ExpenseEdit.KEY_NEW_TEMPLATE, true);
+      startActivity(i);
+      return true;
+    } else if (command == R.id.DELETE_COMMAND_DO) {
+      finishActionMode();
+      startTaskExecution(
+          TaskExecutionFragment.TASK_DELETE_TEMPLATES,
+          (Long[]) tag,
+          CALENDAR.hasPermission(this),
+          R.string.progress_dialog_deleting);
+      return true;
+    } else if (command == R.id.CANCEL_CALLBACK_COMMAND) {
+      finishActionMode();
+      return true;
     }
     return false;
   }
@@ -127,17 +119,12 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
   @Override
   protected void doHome() {
     Intent upIntent = NavUtils.getParentActivityIntent(this);
-    if (shouldUpRecreateTask(this)) {
-      // This activity is NOT part of this app's task, so create a new task
-      // when navigating up, with a synthesized back stack.
-      TaskStackBuilder.create(this)
-          // Add all of this activity's parents to the back stack
-          .addNextIntentWithParentStack(upIntent)
-          // Navigate up to the closest parent
+    if (isTaskRoot()) {
+      // create new task
+      TaskStackBuilder.create(this).addNextIntentWithParentStack(upIntent)
           .startActivities();
     } else {
-      // This activity is part of this app's task, so simply
-      // navigate up to the logical parent activity.
+      // Stay in same task
       NavUtils.navigateUpTo(this, upIntent);
     }
   }
@@ -145,12 +132,11 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
   @Override
   public void onPostExecute(int taskId, Object o) {
     super.onPostExecute(taskId, o);
-    switch (taskId) {
-      case TaskExecutionFragment.TASK_NEW_FROM_TEMPLATE:
-        Integer successCount = (Integer) o;
-        String msg = successCount == 0 ? getString(R.string.save_transaction_error) :
-            getResources().getQuantityString(R.plurals.save_transaction_from_template_success, successCount, successCount);
-        mListFragment.showSnackbar(msg, Snackbar.LENGTH_LONG);
+    if (taskId == TaskExecutionFragment.TASK_NEW_FROM_TEMPLATE) {
+      Integer successCount = (Integer) o;
+      String msg = successCount == 0 ? getString(R.string.save_transaction_error) :
+          getResources().getQuantityString(R.plurals.save_transaction_from_template_success, successCount, successCount);
+      mListFragment.showSnackbar(msg);
     }
   }
 
@@ -159,48 +145,12 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
   }
 
   @Override
-  public void onPositive(Bundle args) {
-    long id = args.getLong(DatabaseConstants.KEY_ROWID);
-    boolean isSplit = args.getBoolean(TemplatesList.KEY_IS_SPLIT);
-    int command = args.getInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE);
-    if (command == R.id.CREATE_INSTANCE_SAVE_COMMAND) {
-      getPrefHandler().putString(PrefKey.TEMPLATE_CLICK_DEFAULT, TEMPLATE_CLICK_ACTION_SAVE);
-      if (isSplit) {
-        mListFragment.requestSplitTransaction(new Long[]{id});
-      } else {
-        mListFragment.dispatchCreateInstanceSaveDo(new Long[]{id});
-      }
-    }
-  }
-
-  @Override
-  public void onNegative(Bundle args) {
-    long id = args.getLong(DatabaseConstants.KEY_ROWID);
-    boolean isSplit = args.getBoolean(TemplatesList.KEY_IS_SPLIT);
-    int command = args.getInt(ConfirmationDialogFragment.KEY_COMMAND_NEGATIVE);
-    if (command == R.id.CREATE_INSTANCE_EDIT_COMMAND) {
-      getPrefHandler().putString(PrefKey.TEMPLATE_CLICK_DEFAULT, TEMPLATE_CLICK_ACTION_EDIT);
-      if (isSplit) {
-        mListFragment.requestSplitTransaction(id);
-      } else {
-        mListFragment.dispatchCreateInstanceEditDo(id);
-      }
-    }
-  }
-
-  @Override
-  public void onDismissOrCancel(Bundle args) {
-  }
-
-  @Override
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                          @NonNull int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    switch (requestCode) {
-      case PermissionHelper.PERMISSIONS_REQUEST_WRITE_CALENDAR: {
-        if (PermissionHelper.allGranted(grantResults)) {
-          mListFragment.loadData();
-        }
+    if (requestCode == PermissionHelper.PERMISSIONS_REQUEST_WRITE_CALENDAR) {
+      if (PermissionHelper.allGranted(grantResults)) {
+        mListFragment.loadData();
       }
     }
   }
@@ -211,7 +161,7 @@ public class ManageTemplates extends ProtectedFragmentActivity implements
       if (tag instanceof Long) {
         mListFragment.dispatchCreateInstanceEditDo((Long) tag);
       } else if (tag instanceof Long[]) {
-        mListFragment.dispatchCreateInstanceSaveDo((Long[]) tag);
+        mListFragment.dispatchCreateInstanceSaveDo((Long[]) tag, null);
       }
     }
   }

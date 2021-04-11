@@ -8,13 +8,12 @@ import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.model.CurrencyContext;
 import org.totschnig.myexpenses.model.PreferencesCurrencyContext;
 import org.totschnig.myexpenses.preference.PrefHandler;
-import org.totschnig.myexpenses.preference.PrefHandlerImpl;
 import org.totschnig.myexpenses.util.Utils;
-import org.totschnig.myexpenses.util.crashreporting.AcraCrashHandler;
-import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
-import org.totschnig.myexpenses.util.locale.UserLocalProviderImpl;
 import org.totschnig.myexpenses.util.locale.UserLocaleProvider;
+import org.totschnig.myexpenses.util.locale.UserLocaleProviderImpl;
 import org.totschnig.myexpenses.util.tracking.Tracker;
+
+import java.util.Locale;
 
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -30,8 +29,8 @@ public class AppModule {
 
   @Provides
   @Singleton
-  static CrashHandler providesCrashHandler() {
-    return (MyApplication.isInstrumentationTest()) ? CrashHandler.NO_OP : new AcraCrashHandler();
+  static Context provideContext(MyApplication myApplication) {
+    return myApplication;
   }
 
   @Provides
@@ -63,31 +62,25 @@ public class AppModule {
   @Provides
   @Singleton
   @Named(USER_COUNTRY)
-  static String provideUserCountry() {
+  static String provideUserCountry(MyApplication application) {
     final String defaultCountry = "us";
     if (BuildConfig.DEBUG) {
       return defaultCountry;
     } else {
-      final String countryFromTelephonyManager = Utils.getCountryFromTelephonyManager();
+      final String countryFromTelephonyManager = Utils.getCountryFromTelephonyManager(application);
       return countryFromTelephonyManager != null ? countryFromTelephonyManager : defaultCountry;
     }
   }
 
   @Provides
   @Singleton
-  static PrefHandler providePrefHandler(MyApplication context) {
-    return new PrefHandlerImpl(context);
+  static CurrencyContext provideCurrencyContext(PrefHandler prefHandler, UserLocaleProvider userLocaleProvider) {
+    return new PreferencesCurrencyContext(prefHandler, userLocaleProvider);
   }
 
   @Provides
   @Singleton
-  static CurrencyContext provideCurrencyContext(PrefHandler prefHandler) {
-    return new PreferencesCurrencyContext(prefHandler);
-  }
-
-  @Provides
-  @Singleton
-  static UserLocaleProvider provideUserLocaleProvider(PrefHandler prefHandler) {
-    return new UserLocalProviderImpl(prefHandler);
+  static UserLocaleProvider provideUserLocaleProvider(PrefHandler prefHandler, Locale locale) {
+    return new UserLocaleProviderImpl(prefHandler, locale);
   }
 }

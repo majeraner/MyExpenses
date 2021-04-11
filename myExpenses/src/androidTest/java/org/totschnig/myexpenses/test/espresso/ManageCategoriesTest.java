@@ -10,20 +10,23 @@ import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
 import org.totschnig.myexpenses.model.Category;
 import org.totschnig.myexpenses.testutils.BaseUiTest;
 
-import androidx.test.InstrumentationRegistry;
-import androidx.test.rule.ActivityTestRule;
+import java.util.concurrent.TimeoutException;
+
+import androidx.annotation.NonNull;
+import androidx.test.core.app.ActivityScenario;
+import androidx.test.ext.junit.rules.ActivityScenarioRule;
 
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.totschnig.myexpenses.testutils.Espresso.openActionBarOverflowOrOptionsMenu;
+import static org.totschnig.myexpenses.testutils.Espresso.openActionBarOverflowMenu;
 
 public class ManageCategoriesTest extends BaseUiTest {
 
   @Rule
-  public ActivityTestRule<ManageCategories> mActivityRule =
-      new ActivityTestRule<>(ManageCategories.class);
+  public ActivityScenarioRule<ManageCategories> scenarioRule =
+      new ActivityScenarioRule<>(ManageCategories.class);
 
   @AfterClass
   public static void tearDown() {
@@ -31,15 +34,16 @@ public class ManageCategoriesTest extends BaseUiTest {
   }
 
   @Test
-  public void setupCategoriesShouldPopulateList() {
+  public void setupCategoriesShouldPopulateList() throws TimeoutException {
     assertThat(waitForAdapter().getCount()).isEqualTo(0);
-    openActionBarOverflowOrOptionsMenu(InstrumentationRegistry.getTargetContext());
+    openActionBarOverflowMenu();
     onView(withText(R.string.menu_categories_setup_default)).perform(click());
     assertThat(waitForAdapter().getCount()).isGreaterThan(0);
   }
 
+  @NonNull
   @Override
-  protected ActivityTestRule<? extends ProtectedFragmentActivity> getTestRule() {
-    return mActivityRule;
+  protected ActivityScenario<? extends ProtectedFragmentActivity> getTestScenario() {
+    return scenarioRule.getScenario();
   }
 }

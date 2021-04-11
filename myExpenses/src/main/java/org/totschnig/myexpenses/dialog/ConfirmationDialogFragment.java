@@ -24,7 +24,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.CheckBox;
 
-import org.totschnig.myexpenses.MyApplication;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import org.totschnig.myexpenses.R;
 
 import androidx.annotation.NonNull;
@@ -40,7 +41,7 @@ import androidx.appcompat.app.AlertDialog;
  * must implement {@link org.totschnig.myexpenses.dialog.ConfirmationDialogFragment.ConfirmationDialogCheckedListener}
  * and handle {@link #KEY_COMMAND_POSITIVE} in {@link org.totschnig.myexpenses.dialog.ConfirmationDialogFragment.ConfirmationDialogCheckedListener#onPositive(Bundle, boolean)}
  */
-public class ConfirmationDialogFragment extends CommitSafeDialogFragment implements OnClickListener {
+public class ConfirmationDialogFragment extends BaseDialogFragment implements OnClickListener {
 
   private CheckBox checkBox;
 
@@ -49,6 +50,7 @@ public class ConfirmationDialogFragment extends CommitSafeDialogFragment impleme
   public static final String KEY_MESSAGE = "message";
   public static final String KEY_COMMAND_POSITIVE = "positiveCommand";
   public static final String KEY_COMMAND_NEGATIVE = "negativeCommand";
+  public static final String KEY_TAG_POSITIVE = "positiveTag";
   public static final String KEY_PREFKEY = "prefKey";
   public static final String KEY_CHECKBOX_LABEL = "checkboxLabel";
   public static final String KEY_POSITIVE_BUTTON_LABEL = "positiveButtonLabel";
@@ -66,7 +68,7 @@ public class ConfirmationDialogFragment extends CommitSafeDialogFragment impleme
   public Dialog onCreateDialog(Bundle savedInstanceState) {
     final Bundle bundle = getArguments();
     Activity ctx = getActivity();
-    AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+    AlertDialog.Builder builder = new MaterialAlertDialogBuilder(ctx);
     int title = bundle.getInt(KEY_TITLE, 0);
     if (title != 0) {
       builder.setTitle(title);
@@ -81,7 +83,7 @@ public class ConfirmationDialogFragment extends CommitSafeDialogFragment impleme
     if (bundle.getString(KEY_PREFKEY) != null ||
         checkboxLabel != 0) {
       //noinspection InflateParams
-      View cb = LayoutInflater.from(ctx).inflate(R.layout.checkbox, null);
+      View cb = LayoutInflater.from(builder.getContext()).inflate(R.layout.checkbox, null);
       checkBox = cb.findViewById(R.id.checkBox);
       checkBox.setText(
           checkboxLabel != 0 ? checkboxLabel :
@@ -102,7 +104,7 @@ public class ConfirmationDialogFragment extends CommitSafeDialogFragment impleme
   }
 
   @Override
-  public void onCancel(DialogInterface dialog) {
+  public void onCancel(@NonNull DialogInterface dialog) {
     ConfirmationDialogBaseListener ctx = (ConfirmationDialogBaseListener) getActivity();
     if (ctx != null) {
       ctx.onDismissOrCancel(getArguments());
@@ -118,9 +120,7 @@ public class ConfirmationDialogFragment extends CommitSafeDialogFragment impleme
     Bundle bundle = getArguments();
     String prefKey = bundle.getString(KEY_PREFKEY);
     if (prefKey != null && checkBox.isChecked()) {
-      MyApplication.getInstance().getSettings().edit()
-          .putBoolean(prefKey, true)
-          .apply();
+      prefHandler.putBoolean(prefKey, true);
     }
     if (which == AlertDialog.BUTTON_POSITIVE) {
       if (bundle.getInt(KEY_CHECKBOX_LABEL, 0) == 0) {

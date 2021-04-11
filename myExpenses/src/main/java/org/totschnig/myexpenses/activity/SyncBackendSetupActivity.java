@@ -34,10 +34,10 @@ import androidx.annotation.Nullable;
 import eltos.simpledialogfragment.form.Input;
 import eltos.simpledialogfragment.form.SimpleFormDialog;
 import eltos.simpledialogfragment.input.SimpleInputDialog;
-import icepick.Icepick;
 import icepick.State;
 import timber.log.Timber;
 
+import static org.totschnig.myexpenses.activity.ConstantsKt.SYNC_BACKEND_SETUP_REQUEST;
 import static org.totschnig.myexpenses.sync.GenericAccountService.KEY_PASSWORD_ENCRYPTION;
 import static org.totschnig.myexpenses.sync.GenericAccountService.KEY_SYNC_PROVIDER_URL;
 import static org.totschnig.myexpenses.sync.GenericAccountService.KEY_SYNC_PROVIDER_USERNAME;
@@ -67,13 +67,6 @@ public abstract class SyncBackendSetupActivity extends ProtectedFragmentActivity
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     backendProviders = ServiceLoader.load(this);
-    Icepick.restoreInstanceState(this, savedInstanceState);
-  }
-
-  @Override
-  protected void onSaveInstanceState(Bundle outState) {
-    super.onSaveInstanceState(outState);
-    Icepick.saveInstanceState(this, outState);
   }
 
   //LocalFileBackend
@@ -107,7 +100,7 @@ public abstract class SyncBackendSetupActivity extends ProtectedFragmentActivity
     if (data.getBoolean(KEY_WEB_DAV_FALLBACK_TO_CLASS1)) {
       bundle.putString(KEY_WEB_DAV_FALLBACK_TO_CLASS1, "1");
     }
-    if (getPrefHandler().getBoolean(PrefKey.WEBDAV_ALLOW_UNVERIFIED_HOST, false)) {
+    if (prefHandler.getBoolean(PrefKey.WEBDAV_ALLOW_UNVERIFIED_HOST, false)) {
       bundle.putString(KEY_ALLOW_UNVERIFIED, "true");
     }
     createAccount(accountName, password, null, bundle);
@@ -161,10 +154,6 @@ public abstract class SyncBackendSetupActivity extends ProtectedFragmentActivity
     }
   }
 
-  protected void showSnackbar(String message) {
-    showSnackbar(message, Snackbar.LENGTH_LONG);
-  }
-
   protected void createAccount(String accountName, String password, String authToken, Bundle bundle) {
     Bundle args = new Bundle();
     args.putString(AccountManager.KEY_ACCOUNT_NAME, accountName);
@@ -183,7 +172,7 @@ public abstract class SyncBackendSetupActivity extends ProtectedFragmentActivity
     getSupportFragmentManager()
         .beginTransaction()
         .add(TaskExecutionFragment.newInstanceWithBundle(args, TASK_CREATE_SYNC_ACCOUNT), ASYNC_TAG)
-        .add(ProgressDialogFragment.newInstance(R.string.progress_dialog_fetching_data_from_sync_backend), PROGRESS_TAG)
+        .add(ProgressDialogFragment.newInstance(getString(R.string.progress_dialog_fetching_data_from_sync_backend)), PROGRESS_TAG)
         .commit();
   }
 
@@ -194,7 +183,7 @@ public abstract class SyncBackendSetupActivity extends ProtectedFragmentActivity
     getSupportFragmentManager()
         .beginTransaction()
         .add(TaskExecutionFragment.newInstanceWithBundle(args, TASK_FETCH_SYNC_ACCOUNT_DATA), ASYNC_TAG)
-        .add(ProgressDialogFragment.newInstance(R.string.progress_dialog_fetching_data_from_sync_backend), PROGRESS_TAG)
+        .add(ProgressDialogFragment.newInstance(getString(R.string.progress_dialog_fetching_data_from_sync_backend)), PROGRESS_TAG)
         .commit();
   }
 

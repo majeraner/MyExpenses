@@ -1,3 +1,5 @@
+import com.novoda.gradle.command.Files
+
 buildscript {
     repositories {
 //        mavenLocal()
@@ -10,25 +12,16 @@ buildscript {
     }
 }
 
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'kotlin-parcelize'
+    id 'kotlin-kapt'
+}
+
 repositories {
 //    mavenLocal()
     mavenCentral()
-    maven { url "https://dl.bintray.com/mockito/maven/" }
-}
-
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlin-android-extensions'
-apply plugin: 'kotlin-kapt'
-//apply plugin: 'com.jakewharton.hugo'
-apply plugin: 'com.novoda.android-command'
-
-def quote(String input) {
-    return "\"" + input + "\""
-}
-
-def getPropertyIfDefined(property) {
-    return getPropertyIfDefined(property, "")
 }
 
 def getPropertyIfDefined(property, defaultValue) {
@@ -39,9 +32,6 @@ def getPropertyIfDefined(property, defaultValue) {
 }
 
 android {
-    sourceSets {
-        main.res.srcDirs += 'src/main/categoryIcons'
-    }
     compileSdkVersion project.compileSdkVersion
     useLibrary 'android.test.runner'
     useLibrary 'android.test.mock'
@@ -51,18 +41,17 @@ android {
         applicationId "org.totschnig.myexpenses"
         minSdkVersion project.minSdkVersion
         targetSdkVersion project.targetSdkVersion
-        versionCode 416
-        versionName '3.1.2.2'
+        versionCode project.versionCode
+        versionName project.versionName
         multiDexEnabled true
+        multiDexKeepProguard file('multidex-config.pro')
 
-        buildConfigField "String", "BUILD_DATE", "\"" + getDate() + "\""
         buildConfigField "String", "DISTRIBUTION", "\"GITHUB\""
         buildConfigField "String[]", "CATEGORY_ICONS", "{" + categoryIcons() + "}"
         testInstrumentationRunner "org.totschnig.myexpenses.MyTestRunner"
-        testProguardFile "proguard-test.txt"
 
         vectorDrawables.useSupportLibrary = true
-        resConfigs "en", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "eu", "fr", "hr", "hu", "it", "iw", "ja", "km", "ko", "ms", "pl", "pt", "ro", "ru", "si", "ta", "tr", "uk", "vi", "pt_PT", "zh_CN", "zh_TW"
+        resConfigs "en", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "eu", "fr", "hr", "hu", "it", "iw", "ja", "km", "kn", "ko", "ms", "pl", "pt", "ro", "ru", "si", "ta", "tr", "uk", "vi", "pt_PT", "zh_CN", "zh_TW", "zh_HK"
 
         javaCompileOptions {
             annotationProcessorOptions {
@@ -73,6 +62,7 @@ android {
 
     kotlinOptions {
         jvmTarget = "1.8"
+        freeCompilerArgs = ["-Xallow-result-return-type"]
     }
 
     compileOptions {
@@ -83,30 +73,27 @@ android {
     /*signingConfigs {
         release {
             storeFile file(getPropertyIfDefined("RELEASE_STORE_FILE", "unknown"))
-            storePassword getPropertyIfDefined("RELEASE_STORE_PASSWORD")
-            keyAlias getPropertyIfDefined("RELEASE_KEY_ALIAS")
-            keyPassword getPropertyIfDefined("RELEASE_KEY_PASSWORD")
+            storePassword getPropertyIfDefined("RELEASE_STORE_PASSWORD", "unknown")
+            keyAlias getPropertyIfDefined("RELEASE_KEY_ALIAS", "unknown")
+            keyPassword getPropertyIfDefined("RELEASE_KEY_PASSWORD", "unknown")
 
         }
     }*/
     buildTypes {
         release {
             minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-project.txt'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-project.txt'
             //signingConfig signingConfigs.release
             manifestPlaceholders = [appName: "@string/app_name", debug: "false"]
             applicationIdSuffix ""
+            //ndk.debugSymbolLevel = 'FULL'
+            buildConfigField "String", "BUILD_DATE", "\"" + getDate() + "\""
         }
         debug {
             applicationIdSuffix ".debug"
             manifestPlaceholders = [appName: "My Expenses Debug", debug: "true"]
-        }
-        forTest {
-            initWith debug
-            applicationIdSuffix ".fortest"
-            manifestPlaceholders = [appName: "My Expenses Test", debug: "true"]
-            matchingFallbacks = ['debug']
             buildConfigField "int", "TEST_SCENARIO", getPropertyIfDefined('testScenario', "1")
+            buildConfigField "String", "BUILD_DATE", "\"now\""
         }
     }
 
@@ -115,11 +102,36 @@ android {
         type.resValue "string", 'sync_account_type', defaultConfig.applicationId + type.applicationIdSuffix + ".sync"
     }
 
-    flavorDimensions "security"
+    flavorDimensions "security", "textRecognition"
 
     productFlavors {
         conscript {
             dimension "security"
+        }
+        intern {
+            dimension "textRecognition"
+        }
+        extern {
+            dimension "textRecognition"
+        }
+    }
+
+    sourceSets {
+        main.res.srcDirs += 'src/main/categoryIcons'
+        conscript {
+            release {
+                java.srcDirs += 'src/conscriptRelease/java'
+            }
+            debug {
+                java.srcDirs += 'src/conscriptDebug/java'
+            }
+        }
+        test {
+            java.srcDirs += "src/testShared/java"
+        }
+
+        androidTest {
+            java.srcDirs += "src/testShared/java"
         }
     }
 
@@ -133,22 +145,11 @@ android {
         jumboMode = true
     }
     packagingOptions {
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/notice.txt'
-        exclude 'META-INF/license.txt'
-        exclude 'META-INF/dependencies.txt'
-        exclude 'META-INF/LGPL2.1'
-        exclude 'META-INF/proguard/androidx-annotations.pro'
-        exclude 'META-INF/gradle/incremental.annotation.processors'
+        exclude 'META-INF/*'
     }
-    testBuildType "forTest"
 
     variantFilter { variant ->
-        if (project.hasProperty("buildType") && !variant.buildType.name.equals(project.ext.buildType)) {
+        if (project.hasProperty("buildType") && variant.buildType.name != project.ext.buildType) {
             setIgnore(true)
         }
     }
@@ -163,24 +164,33 @@ android {
         }
     }
 
-    viewBinding {
-        enabled = true
+    buildFeatures {
+        viewBinding true
     }
+    //It does not seem possible to define dynamicFeatures dependent on variant
+    //If you want to build intern variant, you need to include mlkit and/or tesseract module
+    //dynamicFeatures = [':ocr', ':mlkit', ':tesseract']
+    dynamicFeatures = [':ocr', ':webui']
+}
+
+configurations {
+    conscriptExternReleaseImplementation
+    conscriptInternReleaseImplementation
 }
 
 dependencies {
     implementation project(':transactionscontract')
-    implementation "com.jakewharton:butterknife:$rootProject.butterknifeVersion"
+    implementation "com.jakewharton:butterknife:$butterknifeVersion"
     implementation 'com.squareup.phrase:phrase:1.1.0'
-    kapt "com.jakewharton:butterknife-compiler:$rootProject.butterknifeVersion"
-    kapt "com.google.dagger:dagger-compiler:$rootProject.daggerVersion"
-    implementation "com.google.dagger:dagger:$rootProject.daggerVersion"
+    kapt "com.jakewharton:butterknife-compiler:$butterknifeVersion"
+    kapt "com.google.dagger:dagger-compiler:$daggerVersion"
+    implementation "com.google.dagger:dagger:$daggerVersion"
     compileOnly 'javax.annotation:jsr250-api:1.0'
     implementation 'frankiesardo:icepick:3.2.0'
     kapt 'frankiesardo:icepick-processor:3.2.0'
     implementation 'com.google.code.gson:gson:2.8.6'
 
-    api 'com.google.auto.value:auto-value-annotations:1.7'
+    api 'com.google.auto.value:auto-value-annotations:1.7.4'
     kapt 'com.google.auto.value:auto-value:1.7'
 
     kapt 'com.ryanharter.auto.value:auto-value-gson:1.3.0'
@@ -191,70 +201,68 @@ dependencies {
 
     kapt 'com.ryanharter.auto.value:auto-value-parcel:0.2.8'
 
-    implementation 'com.github.mtotschnig:StickyListHeaders:2.7.2.2'
+    implementation 'com.github.mtotschnig:StickyListHeaders:2.8.0'
     implementation 'com.github.mtotschnig:MaterialSeekBarPreference:bc211774e5'
     implementation project(':PlayLicensingOrig')
     implementation('com.gitlab.mtotschn:dav4android:fbaa5b51') {
         exclude group: "com.android.support", module: "support-annotations"
     }
     implementation 'com.itextpdf:itextpdf:5.5.13.1'
-    implementation "ch.acra:acra-mail:$rootProject.acraVersion"
-    implementation "ch.acra:acra-dialog:$rootProject.acraVersion"
+    implementation "ch.acra:acra-mail:$acraVersion"
+    implementation "ch.acra:acra-dialog:$acraVersion"
     //at the moment, we need to stick with the last version that supports java 6
     //noinspection GradleDependency
-    implementation 'org.apache.commons:commons-lang3:3.5'
-    implementation 'org.apache.commons:commons-csv:1.5'
-    implementation 'com.squareup.picasso:picasso:2.71828'
-    implementation 'com.github.mtotschnig:MPAndroidChart:8ebaf08edd'
-    //implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0-alpha'
+    implementation "org.apache.commons:commons-lang3:$commonsLang"
+    implementation 'org.apache.commons:commons-csv:1.8'
+    implementation "com.squareup.picasso:picasso:$picassoVersion"
+    implementation 'com.github.mtotschnig:MPAndroidChart:6fcf34d9d4'
     implementation 'com.github.mtotschnig:Caldroid:d217ebc306'
-    implementation 'com.github.mtotschnig:SimpleDialogFragments:0e6ab5bc05'
+    implementation 'com.github.eltos:simpledialogfragments:v3.3.2'
     implementation 'com.annimon:stream:1.2.1'
     implementation 'com.getkeepsafe.taptargetview:taptargetview:1.13.0'
 
     // WebDAV2
-    implementation "com.squareup.okhttp3:okhttp:$rootProject.okHttpVersion"
+    //noinspection GradleDependency
+    implementation "com.squareup.okhttp3:okhttp:$okHttpVersion"
 
     // Dropbox
-    implementation 'com.dropbox.core:dropbox-core-sdk:3.1.1'
+    implementation 'com.dropbox.core:dropbox-core-sdk:3.1.5'
 
     //noinspection GradleCompatible
     implementation 'androidx.multidex:multidex:2.0.1'
 
     implementation 'org.apache.commons:commons-collections4:4.1'
 
-    implementation 'com.jakewharton.timber:timber:4.7.1'
+    implementation "com.jakewharton.timber:timber:$timberVersion"
 
-    implementation 'org.slf4j:slf4j-api:1.7.25'
-    implementation 'com.github.tony19:logback-android-core:1.1.1-6'
-    implementation('com.github.tony19:logback-android-classic:1.1.1-6') {
-        // workaround issue #73
-        exclude group: 'com.google.android', module: 'android'
-    }
+    implementation 'org.slf4j:slf4j-api:1.7.30'
+    implementation 'com.github.tony19:logback-android:2.0.0'
 
-    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation "androidx.appcompat:appcompat:$appcompatVersion"
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'androidx.recyclerview:recyclerview:1.1.0'
+    implementation "androidx.recyclerview:recyclerview:$recyclerview"
     implementation 'androidx.cardview:cardview:1.0.0'
-    implementation 'com.google.android.material:material:1.1.0'
+    api "com.google.android.material:material:$materialComponents"
     implementation 'androidx.gridlayout:gridlayout:1.0.0'
-    implementation 'androidx.preference:preference:1.1.1'
-    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    api 'androidx.preference:preference-ktx:1.1.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
 
     implementation 'com.google.android:flexbox:2.0.1'
 
     implementation project(path: ':setupwizard')
 
     //licence validation
-    implementation 'com.squareup.retrofit2:retrofit:2.3.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.3.0'
-    implementation "com.squareup.okhttp3:logging-interceptor:$rootProject.okHttpVersion"
+    implementation "com.squareup.retrofit2:retrofit:$retrofitVersion"
+    implementation "com.squareup.retrofit2:converter-gson:$retrofitVersion"
+    //noinspection GradleDependency
+    implementation "com.squareup.okhttp3:logging-interceptor:$okHttpVersion"
 
-    implementation 'com.jakewharton.threetenabp:threetenabp:1.2.2'
+    implementation "com.jakewharton.threetenabp:threetenabp:$threetenabp"
 
     implementation 'com.github.lzyzsd:circleprogress:1.2.1'
 
-    conscriptImplementation 'org.conscrypt:conscrypt-android:2.4.0'
+    conscriptExternReleaseImplementation 'org.conscrypt:conscrypt-android:2.5.1'
+    conscriptInternReleaseImplementation 'org.conscrypt:conscrypt-android:2.5.1'
 
     implementation 'com.squareup.sqlbrite3:sqlbrite:3.2.0'
     implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
@@ -264,62 +272,78 @@ dependencies {
     implementation 'com.afollestad.material-dialogs:core:3.3.0'
 
     androidTestImplementation 'tools.fastlane:screengrab:2.0.0'
-    androidTestImplementation "androidx.test.espresso:espresso-core:$rootProject.espressoVersion"
-    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
-    androidTestImplementation "androidx.test:runner:$rootProject.androidSupportTestVersion"
-    androidTestUtil "androidx.test:orchestrator:$rootProject.androidSupportTestVersion"
-    androidTestImplementation "androidx.test:rules:$rootProject.androidSupportTestVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-intents:$rootProject.espressoVersion"
-    androidTestImplementation("androidx.test.espresso:espresso-contrib:$rootProject.espressoVersion") {
+    androidTestImplementation "androidx.test.espresso:espresso-core:$espressoVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxTextExtJunit"
+    androidTestImplementation "androidx.test:runner:$androidSupportTestVersion"
+    androidTestUtil "androidx.test:orchestrator:$androidSupportTestVersion"
+    androidTestImplementation "androidx.test:rules:$androidSupportTestVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-intents:$espressoVersion"
+    androidTestImplementation("androidx.test.espresso:espresso-contrib:$espressoVersion") {
         exclude module: 'accessibility-test-framework'
     }
-    //androidTestImplementation  "androidx.test.espresso.idling:idling-concurrent:$rootProject.espressoVersion"
-    androidTestImplementation "org.mockito:mockito-android:$rootProject.mockitoVersion"
+    //androidTestImplementation  "androidx.test.espresso.idling:idling-concurrent:$espressoVersion"
+    androidTestImplementation "org.mockito:mockito-android:$mockitoVersion"
 
-    testImplementation 'junit:junit:4.13'
+    testImplementation "junit:junit:$junitVersion"
     testImplementation 'pl.pragmatists:JUnitParams:1.1.1'
-    testImplementation "org.mockito:mockito-core:$rootProject.mockitoVersion"
-    testImplementation "org.robolectric:robolectric:$rootProject.robolectricVersion"
-    testImplementation "org.robolectric:shadows-multidex:$rootProject.robolectricVersion"
-    testImplementation "androidx.test:core:$rootProject.androidSupportTestVersion"
-    testImplementation 'org.assertj:assertj-core:3.8.0'
-    androidTestImplementation 'org.assertj:assertj-core:3.8.0'
-    implementation "androidx.core:core-ktx:1.3.0"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    androidTestImplementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    testImplementation "org.mockito:mockito-core:$mockitoVersion"
+    testImplementation "org.robolectric:robolectric:$robolectricVersion"
+    testImplementation "org.robolectric:shadows-multidex:$robolectricVersion"
+    testImplementation "androidx.test:core:$androidSupportTestVersion"
+    testImplementation "org.assertj:assertj-core:$assertjVersion"
+    //noinspection GradleDependency
+    androidTestImplementation "org.assertj:assertj-core:$assertjVersionAndroid"
+    implementation "androidx.core:core-ktx:$ktxVersion"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
     androidTestImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+    testImplementation "androidx.test.espresso:espresso-core:$espressoVersion"
+    testImplementation "androidx.test:rules:$androidSupportTestVersion"
+    testImplementation "androidx.test.ext:junit:$androidxTextExtJunit"
 
     // Room components
-    implementation "androidx.room:room-runtime:$rootProject.roomVersion"
-    implementation "androidx.room:room-ktx:$rootProject.roomVersion"
-    kapt "androidx.room:room-compiler:$rootProject.roomVersion"
-    androidTestImplementation "androidx.room:room-testing:$rootProject.roomVersion"
+    implementation "androidx.room:room-runtime:$roomVersion"
+    implementation "androidx.room:room-ktx:$roomVersion"
+    kapt "androidx.room:room-compiler:$roomVersion"
+    androidTestImplementation "androidx.room:room-testing:$roomVersion"
 
     // Lifecycle components
-    implementation "androidx.lifecycle:lifecycle-extensions:$rootProject.archLifecycleVersion"
-    implementation "androidx.lifecycle:lifecycle-common-java8:$rootProject.archLifecycleVersion"
+    implementation "androidx.lifecycle:lifecycle-common-java8:$archLifecycleVersion"
 
-    androidTestImplementation "androidx.arch.core:core-testing:$rootProject.androidxArchVersion"
+    androidTestImplementation "androidx.arch.core:core-testing:$androidxArchVersion"
 
     // ViewModel Kotlin support
-    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$rootProject.archLifecycleVersion"
-    implementation "androidx.lifecycle:lifecycle-livedata-ktx:$rootProject.archLifecycleVersion"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$archLifecycleVersion"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:$archLifecycleVersion"
 
-    // Coroutines
-    api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$rootProject.coroutines"
-    api "org.jetbrains.kotlinx:kotlinx-coroutines-android:$rootProject.coroutines"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines"
 
+    //implementation "androidx.activity:activity-ktx:$activity_version"
+    implementation "androidx.fragment:fragment-ktx:$fragment_version"
+
+    internImplementation "com.google.android.gms:play-services-base:17.6.0"
+
+    //noinspection GradleDependency
+    implementation 'com.github.mtotschnig:Android-Image-Cropper:b3ca5b9877'
 }
 
-def getDate() {
+static def getDate() {
     def date = new Date()
     def formattedDate = date.format('yyyyMMdd-HHmm')
     return formattedDate
 }
 
-task copyFileForFixture(type: com.novoda.gradle.command.Files) {
+//apply plugin: 'com.jakewharton.hugo'
+apply plugin: 'com.novoda.android-command'
+
+task copyFileForFixture(type: Files) {
     script {
         push "tests/script/screenshot.jpg", "/sdcard/Android/data/org.totschnig.myexpenses.fortest/files/screenshot.jpg"
+    }
+}
+
+task echoPublishTag() {
+    doLast {
+        println "git tag r${versionCode}; git push origin r${versionCode}"
     }
 }
 

@@ -49,42 +49,47 @@
         <Preference
             android:key="@string/pref_manage_stale_images_key"
             android:summary="@string/pref_manage_stale_images_summary"
-            android:title="@string/pref_manage_stale_images_title">
+            android:title="@string/pref_manage_stale_images_title"
+            my:isPreferenceVisible="false">
             <intent
                 android:targetClass="org.totschnig.myexpenses.activity.ManageStaleImages"
                 android:targetPackage="@string/application_id" />
         </Preference>
-        <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
+        <ListPreference
             android:key="@string/pref_home_currency_key"
             android:title="@string/pref_home_currency_title" />
         <Preference
             android:key="manage_tags"
             android:summary="@string/pref_manage_tags_summary"
             android:title="@string/tags">
-        <intent
-            android:action="MANAGE"
-            android:targetClass="org.totschnig.myexpenses.activity.ManageTags"
-            android:targetPackage="@string/application_id" />
+            <intent
+                android:action="MANAGE"
+                android:targetClass="org.totschnig.myexpenses.activity.ManageTags"
+                android:targetPackage="@string/application_id" />
         </Preference>
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/pref_category_title_ui">
-        <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
-            android:defaultValue="dark"
+    <PreferenceCategory
+        android:key="@string/pref_category_ui_key"
+        android:title="@string/pref_category_title_ui">
+        <ListPreference
+            android:defaultValue="@string/pref_ui_theme_default"
             android:entries="@array/pref_ui_theme_entries"
             android:entryValues="@array/pref_ui_theme_values"
             android:key="@string/pref_ui_theme_key"
-            android:title="@string/pref_ui_theme_title" />
+            android:title="@string/pref_ui_theme_title"
+            my:useSimpleSummaryProvider="true" />
         <org.totschnig.myexpenses.preference.FontSizeDialogPreference
             android:defaultValue="0"
             android:key="@string/pref_ui_fontsize_key"
             android:title="@string/pref_ui_fontsize_title" />
 
-        <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
+        <ListPreference
             android:defaultValue="default"
             android:entryValues="@array/pref_ui_language_values"
             android:key="@string/pref_ui_language_key"
-            android:title="@string/pref_ui_language_title" />
+            android:title="@string/pref_ui_language_title"
+            my:useSimpleSummaryProvider="true" />
 
         <PreferenceScreen
             android:key="@string/pref_ui_home_screen_shortcuts_key"
@@ -104,7 +109,7 @@
 
         <PreferenceScreen
             android:key="@string/pref_auto_fill_key"
-            android:title="@string/pref_auto_fill_title">
+            android:title="@string/autofill">
             <Preference
                 style="?preferenceInformationStyle"
                 android:summary="@string/pref_auto_fill_summary" />
@@ -117,32 +122,29 @@
             <SwitchPreferenceCompat
                 android:key="@string/pref_auto_fill_comment_key"
                 android:title="@string/comment" />
-            <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
+            <ListPreference
                 android:entries="@array/pref_auto_fill_account_entries"
                 android:entryValues="@array/pref_auto_fill_account_values"
                 android:key="@string/pref_auto_fill_account_key"
-                android:title="@string/account" />
+                android:title="@string/account"
+                my:useSimpleSummaryProvider="true" />
             <SwitchPreferenceCompat
                 android:key="@string/pref_auto_fill_method_key"
                 android:title="@string/method" />
         </PreferenceScreen>
 
-        <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
-            android:entries="@array/pref_template_click_default_entries"
-            android:entryValues="@array/pref_template_click_default_values"
-            android:key="@string/pref_template_click_default_key"
-            android:title="@string/pref_template_click_default_summary" />
-
         <PreferenceScreen
             android:key="@string/pref_grouping_start_key"
             android:title="@string/pref_grouping_periods">
-            <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
+            <ListPreference
                 android:key="@string/pref_group_week_starts_key"
-                android:title="@string/preferences_week_start_day_title" />
-            <org.totschnig.myexpenses.preference.ListPreferenceShowSummary
+                android:title="@string/preferences_week_start_day_title"
+                my:useSimpleSummaryProvider="true" />
+            <ListPreference
                 android:defaultValue="1"
                 android:key="@string/pref_group_month_starts_key"
-                android:title="@string/preferences_month_start_date_title" />
+                android:title="@string/preferences_month_start_date_title"
+                my:useSimpleSummaryProvider="true" />
         </PreferenceScreen>
 
         <PreferenceScreen
@@ -172,10 +174,22 @@
             android:defaultValue="true"
             android:key="@string/pref_clone_with_current_date_key"
             android:summaryOff="@string/pref_clone_with_current_date_summary_off"
-            android:summaryOn="@string/pref_clone_with_current_date_summary_on" />
+            android:summaryOn="@string/pref_clone_with_current_date_summary_on"
+            android:title="@string/pref_clone_with_current_date_title" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="@string/pref_group_header_show_details_key"
+            android:summary="@string/pref_group_header_show_details_summary" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/pref_category_title_import">
+        <Preference android:key="@string/pref_import_csv_key" />
+        <Preference android:key="@string/pref_import_qif_key">
+            <intent
+                android:targetClass="org.totschnig.myexpenses.activity.QifImport"
+                android:targetPackage="@string/application_id" />
+        </Preference>
         <Preference
             android:key="import_from_grisbi"
             android:summary="@string/pref_import_from_grisbi_summary"
@@ -185,12 +199,6 @@
                 android:targetClass="org.totschnig.myexpenses.activity.GrisbiImport"
                 android:targetPackage="@string/application_id" />
         </Preference>
-        <Preference android:key="@string/pref_import_qif_key">
-            <intent
-                android:targetClass="org.totschnig.myexpenses.activity.QifImport"
-                android:targetPackage="@string/application_id" />
-        </Preference>
-        <Preference android:key="@string/pref_import_csv_key" />
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -258,36 +266,85 @@
         </Preference>
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/synchronization">
-        <Preference
-            android:key="@string/pref_manage_sync_backends_key"
-            android:title="@string/pref_manage_sync_backends_title">
+    <PreferenceCategory android:title="@string/pref_category_title_features">
+        <PreferenceScreen
+            android:key="@string/pref_exchange_rates_key"
+            android:title="@string/pref_category_exchange_rates">
+            <ListPreference
+                android:defaultValue="RATESAPI"
+                android:entries="@array/exchange_rate_provider_entries"
+                android:entryValues="@array/exchange_rate_provider_values"
+                android:key="@string/pref_exchange_rate_provider_key"
+                android:summary="@string/pref_exchange_rate_provider_summary"
+                android:title="@string/pref_exchange_rate_provider_title" />
+            <EditTextPreference
+                android:enabled="false"
+                android:key="@string/pref_openexchangerates_app_id_key"
+                android:summary="@string/pref_openexchangerates_app_id_summary"
+                android:title="OpenExchangeRates App ID" />
+        </PreferenceScreen>
+        <PreferenceScreen
+            android:key="@string/pref_ocr_key"
+            android:title="@string/title_scan_receipt_feature">
+            <EditTextPreference
+                android:key="@string/pref_ocr_total_indicators_key"
+                android:summary="@string/pref_ocr_total_indicators_summary"
+                android:title="@string/pref_ocr_total_indicators_title" />
+            <EditTextPreference
+                android:key="@string/pref_ocr_date_formats_key"
+                android:summary="@string/pref_custom_decimal_format_summary"
+                android:title="@string/pref_ocr_date_formats_title" />
+            <EditTextPreference
+                android:key="@string/pref_ocr_time_formats_key"
+                android:summary="@string/pref_custom_decimal_format_summary"
+                android:title="@string/pref_ocr_time_formats_title" />
+            <ListPreference
+                android:entries="@array/ocr_engine_entries"
+                android:entryValues="@array/ocr_engine_values"
+                android:key="@string/pref_ocr_engine_key"
+                android:title="@string/pref_ocr_engine_title"
+                my:useSimpleSummaryProvider="true" />
+            <ListPreference
+                android:entryValues="@array/pref_tesseract_language_values"
+                android:key="@string/pref_tesseract_language_key"
+                android:title="@string/pref_tesseract_language_title"
+                my:isPreferenceVisible="false"
+                my:useSimpleSummaryProvider="true" />
+        </PreferenceScreen>
+        <PreferenceScreen
+            android:key="@string/pref_sync_key"
+            android:title="@string/synchronization">
+            <Preference
+                android:key="@string/pref_manage_sync_backends_key"
+                android:title="@string/pref_manage_sync_backends_title">
 
-            <intent
-                android:targetClass="org.totschnig.myexpenses.activity.ManageSyncBackends"
-                android:targetPackage="@string/application_id" />
-        </Preference>
-        <SeekBarPreference
-            android:defaultValue="12"
-            android:key="@string/pref_sync_frequency_key"
-            android:max="99"
-            android:summary="@string/pref_sync_frequency_summary"
-            android:title="@string/pref_sync_frequency_title"
-            my:min="1"
-            my:showSeekBarValue="true"
-            my:updatesContinuously="true" />
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="@string/pref_sync_notification_key"
-            android:summary="@string/pref_sync_notification_summary" />
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="@string/pref_sync_wifi_only_key"
-            android:summary="@string/pref_sync_wifi_only_summary" />
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="@string/pref_sync_changes_immediately_key"
-            android:summary="@string/pref_sync_changes_immediately_summary" />
+                <intent
+                    android:targetClass="org.totschnig.myexpenses.activity.ManageSyncBackends"
+                    android:targetPackage="@string/application_id" />
+            </Preference>
+            <SeekBarPreference
+                android:defaultValue="12"
+                android:key="@string/pref_sync_frequency_key"
+                android:max="99"
+                android:summary="@string/pref_sync_frequency_summary"
+                android:title="@string/pref_sync_frequency_title"
+                my:min="1"
+                my:showSeekBarValue="true"
+                my:updatesContinuously="true" />
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="@string/pref_sync_notification_key"
+                android:summary="@string/pref_sync_notification_summary" />
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:key="@string/pref_sync_wifi_only_key"
+                android:summary="@string/pref_sync_wifi_only_summary" />
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="@string/pref_sync_changes_immediately_key"
+                android:summary="@string/pref_sync_changes_immediately_summary" />
+        </PreferenceScreen>
+        <SwitchPreferenceCompat android:key="@string/pref_web_ui_key" android:title="@string/title_webui"/>
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -318,7 +375,7 @@
             <SeekBarPreference
                 android:defaultValue="15"
                 android:key="@string/pref_protection_delay_seconds_key"
-                android:max="90"
+                android:max="300"
                 android:summary="@string/pref_protection_delay_seconds_summary"
                 android:title="@string/pref_protection_delay_seconds_title"
                 my:min="1"
@@ -404,7 +461,7 @@
     <PreferenceCategory android:title="@string/feedback">
         <Preference
             android:key="@string/pref_rate_key"
-            android:title="@string/help_button_rate"></Preference>
+            android:title="@string/help_button_rate" />
         <Preference
             android:key="@string/pref_send_feedback_key"
             android:title="@string/pref_send_feedback_title" />
@@ -435,34 +492,20 @@
             <SwitchPreferenceCompat
                 android:defaultValue="true"
                 android:key="@string/pref_crashreport_enabled_key"
-                android:summaryOff="@string/pref_acra_disabled"
-                android:summaryOn="@string/pref_acra_enabled"
+                android:summaryOff="@string/pref_checkbox_disabled"
+                android:summaryOn="@string/pref_checkbox_enabled"
                 android:title="@string/pref_enable_acra" />
-            <org.totschnig.myexpenses.preference.EditTextPreferenceShowSummary
+            <EditTextPreference
                 android:dependency="@string/pref_crashreport_enabled_key"
                 android:inputType="textUri"
                 android:key="@string/pref_crashreport_useremail_key"
                 android:summary="@string/pref_acra_user_email_summary"
-                android:title="@string/pref_acra_user_email" />
+                android:title="@string/pref_acra_user_email"
+                my:useSimpleSummaryProvider="true" />
         </PreferenceScreen>
         <Preference
             android:key="@string/pref_ad_consent_key"
             android:title="@string/pref_ad_consent_title" />
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/pref_category_exchange_rates">
-        <ListPreference
-            android:defaultValue="RATESAPI"
-            android:entries="@array/exchange_rate_provider_entries"
-            android:entryValues="@array/exchange_rate_provider_values"
-            android:key="@string/pref_exchange_rate_provider_key"
-            android:summary="@string/pref_exchange_rate_provider_summary"
-            android:title="@string/pref_exchange_rate_provider_title" />
-        <EditTextPreference
-            android:enabled="false"
-            android:key="@string/pref_openexchangerates_app_id_key"
-            android:summary="@string/pref_openexchangerates_app_id_summary"
-            android:title="OpenExchangeRates App ID" />
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -475,20 +518,38 @@
                 android:targetClass="org.totschnig.myexpenses.activity.ManageCurrencies"
                 android:targetPackage="@string/application_id" />
         </Preference>
-        <EditTextPreference
+        <org.totschnig.myexpenses.preference.NumberFormatPreference
             android:key="@string/pref_custom_decimal_format_key"
             android:summary="@string/pref_custom_decimal_format_summary"
             android:title="@string/pref_custom_decimal_format_title" />
-        <EditTextPreference
+        <org.totschnig.myexpenses.preference.DateFormatPreference
             android:key="@string/pref_custom_date_format_key"
             android:summary="@string/pref_custom_decimal_format_summary"
             android:title="@string/date_format" />
+        <PreferenceScreen
+            android:key="@string/pref_planner_advanced_key"
+            android:title="@string/planner_notification_channel_name">
+            <ListPreference
+                android:key="@string/pref_planner_calendar_id_key"
+                android:title="@string/pref_planning_calendar_title" />
+            <org.totschnig.myexpenses.preference.TimePreference
+                android:key="@string/pref_plan_executor_time_key"
+                android:title="@string/pref_plan_executor_time_title" />
+            <ListPreference
+                android:defaultValue="noon"
+                android:entries="@array/pref_planner_manual_time_entries"
+                android:entryValues="@array/pref_planner_manual_time_values"
+                android:key="@string/pref_planner_manual_time_key"
+                android:title="@string/pref_planner_manual_time_title"
+                my:useSimpleSummaryProvider="true" />
+        </PreferenceScreen>
         <ListPreference
-            android:key="@string/pref_planner_calendar_id_key"
-            android:title="@string/pref_planning_calendar_title" />
-        <org.totschnig.myexpenses.preference.TimePreference
-            android:key="@string/pref_plan_executor_time_key"
-            android:title="@string/pref_plan_executor_time_title" />
+            android:defaultValue="end_of_day"
+            android:entries="@array/pref_criterion_future_entries"
+            android:entryValues="@array/pref_criterion_future_values"
+            android:key="@string/pref_criterion_future_key"
+            android:title="@string/pref_criterion_futur_title"
+            my:useSimpleSummaryProvider="true" />
         <PreferenceScreen
             android:key="@string/pref_webdav_key"
             android:title="WebDAV">
@@ -515,7 +576,23 @@
                 android:summary="@string/pref_debug_logging_summary" />
             <SwitchPreferenceCompat
                 android:key="@string/pref_debug_show_ads_key"
-                android:summary="Ads" />
+                android:summary="Ads"
+                my:isPreferenceVisible="@bool/pref_debug_show_ads_visible" />
+        </PreferenceScreen>
+        <PreferenceScreen
+            android:key="@string/pref_feature_uninstall_key"
+            android:summary="@string/pref_feature_uninstall_summary"
+            android:title="@string/pref_feature_uninstall_title">
+            <MultiSelectListPreference
+                android:key="@string/pref_feature_uninstall_features_key"
+                android:persistent="false"
+                android:positiveButtonText="@string/menu_remove"
+                android:title="@string/pref_category_title_features" />
+            <MultiSelectListPreference
+                android:key="@string/pref_feature_uninstall_languages_key"
+                android:persistent="false"
+                android:positiveButtonText="@string/menu_remove"
+                android:title="@string/pref_feature_uninstall_languages_title" />
         </PreferenceScreen>
     </PreferenceCategory>
 </PreferenceScreen> 

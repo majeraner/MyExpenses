@@ -5,10 +5,8 @@ import android.net.TrafficStats;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParseException;
+import com.squareup.picasso.Picasso;
 
 import org.threeten.bp.LocalDate;
 import org.totschnig.myexpenses.BuildConfig;
@@ -18,14 +16,16 @@ import org.totschnig.myexpenses.provider.ExchangeRateRepository;
 import org.totschnig.myexpenses.retrofit.ExchangeRateService;
 import org.totschnig.myexpenses.retrofit.OpenExchangeRatesApi;
 import org.totschnig.myexpenses.retrofit.RatesApi;
+import org.totschnig.myexpenses.retrofit.RoadmapService;
 import org.totschnig.myexpenses.room.ExchangeRateDatabase;
 import org.totschnig.myexpenses.util.DelegatingSocketFactory;
+import org.totschnig.myexpenses.viewmodel.repository.RoadmapRepository;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.Socket;
+import java.util.concurrent.TimeUnit;
 
 import javax.inject.Singleton;
 import javax.net.SocketFactory;
@@ -43,15 +43,19 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 import timber.log.Timber;
 
-import static okhttp3.logging.HttpLoggingInterceptor.Level.BASIC;
 import static okhttp3.logging.HttpLoggingInterceptor.Level.BODY;
 
 @Module
 class NetworkModule {
 
   @Provides
+  static Picasso providePicasso() {
+    return Picasso.get();
+  }
+
+  @Provides
   static OkHttpClient.Builder provideOkHttpClientBuilder(@Nullable HttpLoggingInterceptor loggingInterceptor,
-                                                  SocketFactory socketFactory) {
+                                                         SocketFactory socketFactory) {
     final OkHttpClient.Builder builder = new OkHttpClient.Builder();
 
     if (loggingInterceptor != null) {
@@ -96,9 +100,9 @@ class NetworkModule {
 
   @Provides
   @Singleton
-  static Gson provideGson() {
+  static Gson provideGson(JsonDeserializer<LocalDate> localDateJsonDeserializer) {
     return new GsonBuilder()
-        .registerTypeAdapter(LocalDate.class, new DateTimeDeserializer())
+        .registerTypeAdapter(LocalDate.class, localDateJsonDeserializer)
         .create();
   }
 
@@ -145,10 +149,25 @@ class NetworkModule {
     return new ExchangeRateRepository(ExchangeRateDatabase.getDatabase(application).exchangeRateDao(), prefHandler, service);
   }
 
-  private static class DateTimeDeserializer implements JsonDeserializer<LocalDate> {
-    public LocalDate deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
-        throws JsonParseException {
-      return LocalDate.parse(json.getAsJsonPrimitive().getAsString());
-    }
+  @Provides
+  @Singleton
+  static JsonDeserializer<LocalDate> provideLocalDateJsonDeserializer() {
+    return (json, typeOfT, context) -> LocalDate.parse(json.getAsJsonPrimitive().getAsString());
+  }
+
+  @Provides
+  @Singleton
+  static RoadmapService provideRoadmapService(OkHttpClient.Builder builder) {
+    OkHttpClient okHttpClient = builder
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build();
+    Retrofit retrofit = new Retrofit.Builder()
+        .baseUrl(RoadmapRepository.Companion.getROADMAP_URL())
+        .addConverterFactory(GsonConverterFactory.create())
+        .client(okHttpClient)
+        .build();
+    return retrofit.create(RoadmapService.class);
   }
 }

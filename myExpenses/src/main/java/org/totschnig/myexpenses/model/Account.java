@@ -30,6 +30,8 @@ import android.os.RemoteException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.totschnig.myexpenses.MyApplication;
+import org.totschnig.myexpenses.di.AppComponent;
+import org.totschnig.myexpenses.preference.PrefHandler;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
 import org.totschnig.myexpenses.provider.DbUtils;
@@ -41,6 +43,7 @@ import org.totschnig.myexpenses.sync.SyncAdapter;
 import org.totschnig.myexpenses.util.Result;
 import org.totschnig.myexpenses.util.ShortcutHelper;
 import org.totschnig.myexpenses.util.Utils;
+import org.totschnig.myexpenses.util.licence.LicenceHandler;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -50,8 +53,6 @@ import androidx.annotation.VisibleForTesting;
 
 import static android.content.ContentProviderOperation.newUpdate;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.HAS_CLEARED;
-import static org.totschnig.myexpenses.provider.DatabaseConstants.HAS_EXPORTED;
-import static org.totschnig.myexpenses.provider.DatabaseConstants.HAS_FUTURE;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ACCOUNTID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_AMOUNT;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_CLEARED_TOTAL;
@@ -93,7 +94,6 @@ import static org.totschnig.myexpenses.provider.DatabaseConstants.TABLE_ACCOUNTS
 import static org.totschnig.myexpenses.provider.DatabaseConstants.TABLE_TRANSACTIONS;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.WHERE_EXPENSE;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.WHERE_INCOME;
-import static org.totschnig.myexpenses.provider.DatabaseConstants.WHERE_IN_PAST;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.WHERE_NOT_SPLIT_PART;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.WHERE_TRANSFER;
 
@@ -156,15 +156,15 @@ public class Account extends Model {
   }
 
   public static String[] PROJECTION_BASE, PROJECTION_FULL;
-  public static final String CURRENT_BALANCE_EXPR = KEY_OPENING_BALANCE + " + (" + SELECT_AMOUNT_SUM + " AND " + WHERE_NOT_SPLIT_PART
-      + " AND " + WHERE_IN_PAST + " )";
-
+  public static String CURRENT_BALANCE_EXPR;
 
   static {
     buildProjection();
   }
 
   public static void buildProjection() {
+    CURRENT_BALANCE_EXPR = KEY_OPENING_BALANCE + " + (" + SELECT_AMOUNT_SUM + " AND " + WHERE_NOT_SPLIT_PART
+        + " AND " + DatabaseConstants.getWhereInPast() + " )";
     PROJECTION_BASE = new String[]{
         TABLE_ACCOUNTS + "." + KEY_ROWID + " AS " + KEY_ROWID,
         KEY_LABEL,
@@ -176,7 +176,6 @@ public class Account extends Model {
         KEY_TYPE,
         KEY_SORT_KEY,
         KEY_EXCLUDE_FROM_TOTALS,
-        HAS_EXPORTED,
         KEY_SYNC_ACCOUNT_NAME,
         KEY_UUID,
         KEY_SORT_DIRECTION,
@@ -207,7 +206,7 @@ public class Account extends Model {
             " AND " + KEY_CR_STATUS + " = '" + CrStatus.RECONCILED.name() + "'  ) AS " + KEY_RECONCILED_TOTAL;
     PROJECTION_FULL[baseLength + 7] = KEY_USAGES;
     PROJECTION_FULL[baseLength + 8] = "0 AS " + KEY_IS_AGGREGATE;//this is needed in the union with the aggregates to sort real accounts first
-    PROJECTION_FULL[baseLength + 9] = HAS_FUTURE;
+    PROJECTION_FULL[baseLength + 9] = DatabaseConstants.getHasFuture();
     PROJECTION_FULL[baseLength + 10] = HAS_CLEARED;
     PROJECTION_FULL[baseLength + 11] = AccountType.sqlOrderExpression();
     PROJECTION_FULL[baseLength + 12] = KEY_LAST_USED;
@@ -265,8 +264,8 @@ public class Account extends Model {
 
   private Uri buildExchangeRateUri() {
     return ContentUris.appendId(TransactionProvider.ACCOUNT_EXCHANGE_RATE_URI.buildUpon(), getId())
-        .appendEncodedPath(currencyUnit.code())
-        .appendEncodedPath(PrefKey.HOME_CURRENCY.getString(currencyUnit.code())).build();
+        .appendEncodedPath(currencyUnit.getCode())
+        .appendEncodedPath(PrefKey.HOME_CURRENCY.getString(currencyUnit.getCode())).build();
   }
 
   private double adjustExchangeRate(double raw) {
@@ -275,13 +274,13 @@ public class Account extends Model {
 
   private void storeExchangeRate() {
     ContentValues exchangeRateValues = new ContentValues();
-    int minorUnitDelta = Utils.getHomeCurrency().fractionDigits() - currencyUnit.fractionDigits();
+    int minorUnitDelta = Utils.getHomeCurrency().getFractionDigits() - currencyUnit.getFractionDigits();
     exchangeRateValues.put(KEY_EXCHANGE_RATE, exchangeRate * Math.pow(10, minorUnitDelta));
     cr().insert(buildExchangeRateUri(), exchangeRateValues);
   }
 
   private boolean hasForeignCurrency() {
-    return !PrefKey.HOME_CURRENCY.getString(currencyUnit.code()).equals(currencyUnit.code());
+    return !PrefKey.HOME_CURRENCY.getString(currencyUnit.getCode()).equals(currencyUnit.getCode());
   }
 
   /**
@@ -296,9 +295,7 @@ public class Account extends Model {
   }
 
   public static void checkSyncAccounts(Context context) {
-    String[] validAccounts = GenericAccountService.getAccountsAsStream(context)
-        .map(account -> account.name)
-        .toArray(size -> new String[size]);
+    String[] validAccounts = GenericAccountService.getAccountNames(context);
     ContentValues values = new ContentValues(1);
     values.putNull(KEY_SYNC_ACCOUNT_NAME);
     String where = validAccounts.length > 0 ?
@@ -315,7 +312,7 @@ public class Account extends Model {
     }
     if (account.getSyncAccountName() != null) {
       AccountManager accountManager = AccountManager.get(MyApplication.getInstance());
-      android.accounts.Account syncAccount = GenericAccountService.GetAccount(account.getSyncAccountName());
+      android.accounts.Account syncAccount = GenericAccountService.getAccount(account.getSyncAccountName());
       accountManager.setUserData(syncAccount, SyncAdapter.KEY_LAST_SYNCED_LOCAL(account.getId()), null);
       accountManager.setUserData(syncAccount, SyncAdapter.KEY_LAST_SYNCED_REMOTE(account.getId()), null);
     }
@@ -408,7 +405,7 @@ public class Account extends Model {
 
     this.syncAccountName = c.getString(c.getColumnIndex(KEY_SYNC_ACCOUNT_NAME));
 
-    this.uuid = c.getString(c.getColumnIndex(KEY_UUID));
+    this.setUuid(c.getString(c.getColumnIndex(KEY_UUID)));
 
     try {
       this.sortDirection = SortDirection.valueOf(c.getString(c.getColumnIndex(KEY_SORT_DIRECTION)));
@@ -565,7 +562,7 @@ public class Account extends Model {
   public static boolean getHasExported(Long accountId) {
     String selection = null;
     String[] selectionArgs = null;
-    if (accountId != null) {
+    if (accountId != Account.HOME_AGGREGATE_ID) {
       if (accountId < 0L) {
         //aggregate account
         AggregateAccount aa = AggregateAccount.getInstanceFromDb(accountId);
@@ -574,7 +571,7 @@ public class Account extends Model {
         if (aa == null) {
           return false;
         }
-        selectionArgs = new String[]{aa.getCurrencyUnit().code()};
+        selectionArgs = new String[]{aa.getCurrencyUnit().getCode()};
       } else {
         selection = KEY_ACCOUNTID + " = ?";
         selectionArgs = new String[]{String.valueOf(accountId)};
@@ -632,7 +629,7 @@ public class Account extends Model {
     initialValues.put(KEY_LABEL, getLabel());
     initialValues.put(KEY_OPENING_BALANCE, openingBalance.getAmountMinor());
     initialValues.put(KEY_DESCRIPTION, description);
-    initialValues.put(KEY_CURRENCY, currencyUnit.code());
+    initialValues.put(KEY_CURRENCY, currencyUnit.getCode());
     initialValues.put(KEY_TYPE, getType().name());
     initialValues.put(KEY_GROUPING, getGrouping().name());
     initialValues.put(KEY_COLOR, color);
@@ -666,7 +663,7 @@ public class Account extends Model {
 
   private void ensureCurrency(CurrencyUnit currencyUnit) {
     Cursor cursor = cr().query(TransactionProvider.CURRENCIES_URI, new String[]{"count(*)"},
-        KEY_CODE + " = ?", new String[]{currencyUnit.code()}, null);
+        KEY_CODE + " = ?", new String[]{currencyUnit.getCode()}, null);
     if (cursor != null) {
       cursor.moveToFirst();
       int result = cursor.getInt(0);
@@ -675,8 +672,8 @@ public class Account extends Model {
         return;
       }
       ContentValues contentValues = new ContentValues(2);
-      contentValues.put(KEY_LABEL, currencyUnit.code());
-      contentValues.put(KEY_CODE, currencyUnit.code());
+      contentValues.put(KEY_LABEL, currencyUnit.getCode());
+      contentValues.put(KEY_CODE, currencyUnit.getCode());
       if (cr().insert(TransactionProvider.CURRENCIES_URI, contentValues) != null) {
         return;
       }
@@ -869,20 +866,23 @@ public class Account extends Model {
       Bundle bundle = new Bundle();
       bundle.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
       bundle.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
-      bundle.putString(DatabaseConstants.KEY_UUID, uuid);
-      ContentResolver.requestSync(GenericAccountService.GetAccount(syncAccountName),
+      bundle.putString(DatabaseConstants.KEY_UUID, getUuid());
+      ContentResolver.requestSync(GenericAccountService.getAccount(syncAccountName),
           TransactionProvider.AUTHORITY, bundle);
     }
   }
 
   public static void updateNewAccountEnabled() {
     boolean newAccountEnabled = true;
-    if (!ContribFeature.ACCOUNTS_UNLIMITED.hasAccess()) {
+    final AppComponent appComponent = MyApplication.getInstance().getAppComponent();
+    LicenceHandler licenceHandler = appComponent.licenceHandler();
+    PrefHandler prefHandler = appComponent.prefHandler();
+    if (!licenceHandler.hasAccessTo(ContribFeature.ACCOUNTS_UNLIMITED)) {
       if (count(null, null) >= ContribFeature.FREE_ACCOUNTS) {
         newAccountEnabled = false;
       }
     }
-    PrefKey.NEW_ACCOUNT_ENABLED.putBoolean(newAccountEnabled);
+    prefHandler.putBoolean(PrefKey.NEW_ACCOUNT_ENABLED, newAccountEnabled);
   }
 
   public static void updateTransferShortcut() {
@@ -895,20 +895,26 @@ public class Account extends Model {
    * @param withType true means, that the query is for either positive (income) or negative (expense) transactions
    *                 in that case, the merge transfer restriction must be skipped, since it is based on only
    *                 selecting the negative part of a transfer
-   * @return
    */
   public Uri getExtendedUriForTransactionList(boolean withType) {
     return Transaction.EXTENDED_URI;
   }
 
   public boolean isHomeAggregate() {
-    return getId() == HOME_AGGREGATE_ID;
+    return isHomeAggregate(getId());
+  }
+
+  public static boolean isHomeAggregate(long id) {
+    return id == HOME_AGGREGATE_ID;
   }
 
   public boolean isAggregate() {
-    return getId() < 0;
+    return isAggregate(getId());
   }
 
+  public static boolean isAggregate(long id) {
+    return id < 0;
+  }
 
   public String[] getExtendedProjectionForTransactionList() {
     return Transaction.PROJECTION_EXTENDED;

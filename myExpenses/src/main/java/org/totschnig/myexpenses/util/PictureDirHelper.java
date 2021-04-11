@@ -1,7 +1,5 @@
 package org.totschnig.myexpenses.util;
 
-import android.annotation.SuppressLint;
-import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -15,12 +13,15 @@ import java.util.List;
 import java.util.Locale;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 import androidx.core.content.ContextCompat;
 
 import static org.totschnig.myexpenses.util.AppDirHelper.getContentUriForFile;
 
 public class PictureDirHelper {
+
+  public static File getOutputMediaFile(String fileName, boolean temp, boolean checkUnique) {
+    return getOutputMediaFile(fileName, temp, MyApplication.getInstance().isProtected(), checkUnique);
+  }
   /**
    * create a File object for storage of picture data
    *
@@ -28,9 +29,10 @@ public class PictureDirHelper {
    *             the user is editing the transaction if false the file will serve
    *             as permanent storage,
    *             care is taken that the file does not yet exist
+   * @param checkUnique
    * @return a file on the external storage
    */
-  public static File getOutputMediaFile(String fileName, boolean temp, boolean secure) {
+  public static File getOutputMediaFile(String fileName, boolean temp, boolean secure, boolean checkUnique) {
     // To be safe, you should check that the SDCard is mounted
     // using Environment.getExternalStorageState() before doing this.
 
@@ -41,7 +43,7 @@ public class PictureDirHelper {
     do {
       result = new File(mediaStorageDir, getOutputMediaFileName(fileName, postfix));
       postfix++;
-    } while (result.exists());
+    } while (checkUnique && result.exists());
     return result;
   }
 
@@ -52,15 +54,13 @@ public class PictureDirHelper {
   public static Uri getOutputMediaUri(boolean temp, boolean secure) {
     String fileName = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
         .format(new Date());
-    File outputMediaFile = getOutputMediaFile(fileName, temp, secure);
+    File outputMediaFile = getOutputMediaFile(fileName, temp, secure, true);
     if (outputMediaFile == null) return null;
-    if (!temp) {
-      try {
-        return getContentUriForFile(outputMediaFile);
-      } catch (IllegalArgumentException e) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-          throw new NougatFileProviderException(e);
-        }
+    try {
+      return getContentUriForFile(outputMediaFile);
+    } catch (IllegalArgumentException e) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !temp) {
+        throw new NougatFileProviderException(e);
       }
     }
     return Uri.fromFile(outputMediaFile);
@@ -93,11 +93,6 @@ public class PictureDirHelper {
     return result.exists() ? result : null;
   }
 
-  @SuppressLint("InlinedApi")
-  public static String getContentIntentAction() {
-    return Intent.ACTION_GET_CONTENT;
-  }
-
   /**
    * @param pictureUri
    * @return
@@ -106,7 +101,6 @@ public class PictureDirHelper {
     return getFileForUri(pictureUri).exists();
   }
 
-  @VisibleForTesting
   @NonNull
   public static File getFileForUri(Uri pictureUri) throws IllegalArgumentException {
     if ("file".equals(pictureUri.getScheme())) {

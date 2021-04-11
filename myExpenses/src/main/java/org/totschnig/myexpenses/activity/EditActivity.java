@@ -15,22 +15,19 @@
 
 package org.totschnig.myexpenses.activity;
 
-import android.content.res.TypedArray;
+import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.TypedValue;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.TextView;
+import android.view.inputmethod.InputMethodManager;
 
 import org.totschnig.myexpenses.R;
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment;
 import org.totschnig.myexpenses.ui.AmountInput;
+import org.totschnig.myexpenses.util.FormAccentUtilKt;
 
 import java.math.BigDecimal;
 
@@ -42,11 +39,10 @@ public abstract class EditActivity extends ProtectedFragmentActivity implements 
 
   private static final String KEY_IS_DIRTY = "isDirty";
   protected boolean mIsSaving = false;
-  private boolean mIsDirty = false;
+  @State
+  protected boolean mIsDirty = false;
   @State
   protected boolean mNewInstance = true;
-  private int primaryColor;
-  private int accentColor;
 
   abstract int getDiscardNewMessage();
 
@@ -73,19 +69,22 @@ public abstract class EditActivity extends ProtectedFragmentActivity implements 
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
-    setTheme(getThemeIdEditDialog());
     super.onCreate(savedInstanceState);
-    TypedValue typedValue = new TypedValue();
-    TypedArray a = obtainStyledAttributes(typedValue.data,
-        new int[]{android.R.attr.textColorSecondary});
-    primaryColor = a.getColor(0, 0);
-    a.recycle();
-    a = obtainStyledAttributes(typedValue.data, new int[]{R.attr.colorAccent});
-    accentColor = a.getColor(0, 0);
-    a.recycle();
     if (savedInstanceState != null && savedInstanceState.getBoolean(KEY_IS_DIRTY)) {
       setDirty();
     }
+  }
+
+  @Override
+  public void setContentView(View view) {
+    super.setContentView(view);
+    requireFloatingActionButton();
+  }
+
+  @Override
+  public void setContentView(int layoutResID) {
+    super.setContentView(layoutResID);
+    requireFloatingActionButton();
   }
 
   protected Toolbar setupToolbar() {
@@ -95,19 +94,14 @@ public abstract class EditActivity extends ProtectedFragmentActivity implements 
   }
 
   @Override
-  public boolean onCreateOptionsMenu(Menu menu) {
-    MenuInflater inflater = getMenuInflater();
-    inflater.inflate(R.menu.one, menu);
-    super.onCreateOptionsMenu(menu);
-    return true;
-  }
-
-  @Override
   public boolean onOptionsItemSelected(MenuItem item) {
-    if (isDirty() && item.getItemId() == android.R.id.home) {
-      showDiscardDialog();
-      return true;
-    }
+    if (item.getItemId() == android.R.id.home)
+      if (isDirty()) {
+        showDiscardDialog();
+        return true;
+      } else {
+        hideKeyboard();
+      }
     return super.onOptionsItemSelected(item);
   }
 
@@ -117,8 +111,8 @@ public abstract class EditActivity extends ProtectedFragmentActivity implements 
         mNewInstance ? getDiscardNewMessage() : R.string.dialog_confirm_discard_changes));
     //noinspection InlinedApi
     b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE, android.R.id.home);
-    b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.yes);
-    b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, R.string.no);
+    b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.response_yes);
+    b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, R.string.response_no);
     ConfirmationDialogFragment.newInstance(b)
         .show(getSupportFragmentManager(), "DISCARD");
   }
@@ -128,13 +122,9 @@ public abstract class EditActivity extends ProtectedFragmentActivity implements 
     if (super.dispatchCommand(command, tag)) {
       return true;
     }
-    switch (command) {
-      case R.id.SAVE_COMMAND:
-        doSave(false);
-        return true;
-      case R.id.SAVE_AND_NEW_COMMAND:
-        doSave(true);
-        return true;
+    if (command == R.id.CREATE_COMMAND) {
+      doSave(false);
+      return true;
     }
     return false;
   }
@@ -169,42 +159,29 @@ public abstract class EditActivity extends ProtectedFragmentActivity implements 
     super.onBackPressed();
   }
 
-  public void linkInputWithLabel(final View input, final View label) {
-    setOnFocusChangeListenerRecursive(input, (v, hasFocus) ->
-        ((TextView) label).setTextColor(hasFocus ? accentColor : primaryColor));
-  }
-
-  private void setOnFocusChangeListenerRecursive(View view, View.OnFocusChangeListener listener) {
-    if (view instanceof ViewGroup && !view.isFocusable()) {
-      ViewGroup group = ((ViewGroup) view);
-      for (int i = 0; i < group.getChildCount(); i++) {
-        setOnFocusChangeListenerRecursive(group.getChildAt(i), listener);
-      }
-    } else {
-      view.setOnFocusChangeListener(listener);
-    }
-  }
-
-  @Override
-  protected void onSaveInstanceState(Bundle outState) {
-    super.onSaveInstanceState(outState);
-    outState.putBoolean(KEY_IS_DIRTY, isDirty());
+  protected void linkInputsWithLabels() {
+    FormAccentUtilKt.linkInputsWithLabels(findViewById(R.id.Table));
   }
 
   public boolean isDirty() {
     return mIsDirty;
   }
 
-  private void setDirty(boolean isDirty) {
-    this.mIsDirty = isDirty;
+  public void setDirty() {
+    mIsDirty = true;
   }
 
-  public void setDirty() {
-    setDirty(true);
+  protected void clearDirty() {
+    mIsDirty = false;
   }
 
   @Override
   protected int getSnackbarContainerId() {
     return R.id.edit_container;
+  }
+
+  protected void hideKeyboard() {
+    InputMethodManager im = (InputMethodManager) getApplicationContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+    im.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
   }
 }

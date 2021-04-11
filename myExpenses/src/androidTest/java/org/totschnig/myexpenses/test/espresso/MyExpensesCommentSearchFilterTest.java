@@ -20,9 +20,12 @@ import org.totschnig.myexpenses.testutils.BaseUiTest;
 import org.totschnig.myexpenses.testutils.Matchers;
 
 import java.util.Currency;
+import java.util.concurrent.TimeoutException;
 
+import androidx.annotation.NonNull;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.espresso.matcher.CursorMatchers;
-import androidx.test.rule.ActivityTestRule;
+import androidx.test.ext.junit.rules.ActivityScenarioRule;
 
 import static androidx.test.espresso.Espresso.onData;
 import static androidx.test.espresso.Espresso.onView;
@@ -39,13 +42,13 @@ public final class MyExpensesCommentSearchFilterTest extends BaseUiTest {
   private static final String comment1 = "something";
   private static final String comment2 = "different";
   @Rule
-  public ActivityTestRule<MyExpenses> mActivityRule =
-      new ActivityTestRule<>(MyExpenses.class);
+  public ActivityScenarioRule<MyExpenses> scenarioRule =
+      new ActivityScenarioRule<>(MyExpenses.class);
   private static Account account;
 
   @BeforeClass
   public static void fixture() {
-    final CurrencyUnit currency = CurrencyUnit.create(Currency.getInstance("EUR"));
+    final CurrencyUnit currency = new CurrencyUnit(Currency.getInstance("EUR"));
     account = new Account("Test account 1",  currency, 0, "",
         AccountType.CASH, Account.DEFAULT_COLOR);
     account.save();
@@ -63,7 +66,7 @@ public final class MyExpensesCommentSearchFilterTest extends BaseUiTest {
   }
 
   @Test
-  public void amountFilterShouldHideTransaction() {
+  public void amountFilterShouldHideTransaction() throws TimeoutException {
     waitForAdapter();
     commentIsDisplayed(comment1);
     commentIsDisplayed(comment2);
@@ -84,14 +87,15 @@ public final class MyExpensesCommentSearchFilterTest extends BaseUiTest {
         .inAdapterView(getWrappedList()).check(matches(isDisplayed()));
   }
 
-  private void commentIsNotDisplayed(String comment) {
+  private void commentIsNotDisplayed(@SuppressWarnings("SameParameterValue") String comment) {
     onView(getWrappedList())
         .check(matches(not(Matchers.withAdaptedData(
             CursorMatchers.withRowString(DatabaseConstants.KEY_COMMENT, comment)))));
   }
 
+  @NonNull
   @Override
-  protected ActivityTestRule<? extends ProtectedFragmentActivity> getTestRule() {
-    return mActivityRule;
+  protected ActivityScenario<? extends ProtectedFragmentActivity> getTestScenario() {
+    return scenarioRule.getScenario();
   }
 }

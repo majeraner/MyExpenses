@@ -39,6 +39,7 @@ import android.widget.RadioGroup;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.totschnig.myexpenses.MyApplication;
@@ -49,9 +50,10 @@ import org.totschnig.myexpenses.adapter.CurrencyAdapter;
 import org.totschnig.myexpenses.export.qif.QifDateFormat;
 import org.totschnig.myexpenses.model.Account;
 import org.totschnig.myexpenses.model.AccountType;
+import org.totschnig.myexpenses.preference.PrefHandler;
 import org.totschnig.myexpenses.preference.PrefKey;
 import org.totschnig.myexpenses.provider.DatabaseConstants;
-import org.totschnig.myexpenses.util.DistributionHelper;
+import org.totschnig.myexpenses.util.distrib.DistributionHelper;
 import org.totschnig.myexpenses.util.PermissionHelper.PermissionGroup;
 import org.totschnig.myexpenses.util.Utils;
 
@@ -62,6 +64,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 
+import static org.totschnig.myexpenses.activity.ConstantsKt.IMPORT_FILENAME_REQUEST_CODE;
 import static org.totschnig.myexpenses.util.PermissionHelper.PermissionGroup.CALENDAR;
 
 public class DialogUtils {
@@ -73,19 +76,15 @@ public class DialogUtils {
    * and from version update
    */
   public static Dialog sendWithFTPDialog(final ProtectedFragmentActivity ctx) {
-    return new AlertDialog.Builder(ctx)
+    return new MaterialAlertDialogBuilder(ctx)
         .setMessage(R.string.no_app_handling_ftp_available)
-        .setPositiveButton(android.R.string.yes, (dialog, id) -> {
+        .setPositiveButton(R.string.response_yes, (dialog, id) -> {
           ctx.dismissDialog(R.id.FTP_DIALOG);
           Intent intent = new Intent(Intent.ACTION_VIEW);
           intent.setData(Uri.parse(DistributionHelper.getMarketPrefix() + "org.totschnig.sendwithftp"));
-          if (Utils.isIntentAvailable(ctx, intent)) {
-            ctx.startActivity(intent);
-          } else {
-            ctx.showSnackbar(R.string.error_accessing_market, Snackbar.LENGTH_LONG);
-          }
+          ctx.startActivity(intent, R.string.error_accessing_market, null);
         })
-        .setNegativeButton(android.R.string.no, (dialog, id) -> ctx.dismissDialog(R.id.FTP_DIALOG)).create();
+        .setNegativeButton(R.string.response_no, (dialog, id) -> ctx.dismissDialog(R.id.FTP_DIALOG)).create();
   }
 
   public static void showPasswordDialog(final ProtectedFragmentActivity ctx, AlertDialog dialog,
@@ -109,12 +108,11 @@ public class DialogUtils {
 
   public static AlertDialog passwordDialog(final Activity ctx, final boolean cancelable) {
     final String securityQuestion = PrefKey.SECURITY_QUESTION.getString("");
-    LayoutInflater li = LayoutInflater.from(ctx);
+    AlertDialog.Builder builder = new MaterialAlertDialogBuilder(ctx);
     //noinspection InflateParams
-    View view = li.inflate(R.layout.password_check, null);
-    view.findViewById(R.id.password).setTag(Boolean.valueOf(false));
-    AlertDialog.Builder builder = new AlertDialog.Builder(ctx)
-        .setTitle(R.string.password_prompt)
+    View view = LayoutInflater.from(builder.getContext()).inflate(R.layout.password_check, null);
+    view.findViewById(R.id.password).setTag(Boolean.FALSE);
+    builder.setTitle(R.string.password_prompt)
         .setView(view)
         .setOnCancelListener(dialog -> {
           if (cancelable) {
@@ -165,7 +163,7 @@ public class DialogUtils {
                 }
               }
             }
-          } catch (Exception e) {
+          } catch (Exception ignored) {
           } finally {
             cursor.close();
           }
@@ -207,11 +205,11 @@ public class DialogUtils {
       TextView error = dialog.findViewById(R.id.passwordInvalid);
       if (v == dialog.getButton(AlertDialog.BUTTON_NEUTRAL)) {
         if ((Boolean) input.getTag()) {
-          input.setTag(Boolean.valueOf(false));
+          input.setTag(Boolean.FALSE);
           ((Button) v).setText(R.string.password_lost);
           dialog.setTitle(R.string.password_prompt);
         } else {
-          input.setTag(Boolean.valueOf(true));
+          input.setTag(Boolean.TRUE);
           dialog.setTitle(securityQuestion);
           ((Button) v).setText(android.R.string.cancel);
         }
@@ -225,10 +223,10 @@ public class DialogUtils {
           callback.onPasswordDialogUnlocked();
           if (isInSecurityQuestion) {
             PrefKey.PROTECTION_LEGACY.putBoolean(false);
-            ctx.showDismissableSnackbar(R.string.password_disabled_reenable);
+            ctx.showDismissibleSnackbar(R.string.password_disabled_reenable);
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setText(R.string.password_lost);
             dialog.setTitle(R.string.password_prompt);
-            input.setTag(Boolean.valueOf(false));
+            input.setTag(Boolean.FALSE);
           }
           dialog.dismiss();
         } else {
@@ -274,8 +272,7 @@ public class DialogUtils {
     void onCalendarPermissionDenied();
   }
 
-  public static Spinner configureDateFormat(View view, Context context, String prefName) {
-    Spinner spinner = (Spinner) view.findViewById(R.id.DateFormat);
+  public static void configureDateFormat(Spinner spinner, Context context, PrefHandler prefHandler, String prefName) {
     ArrayAdapter<QifDateFormat> dateFormatAdapter =
         new ArrayAdapter<>(
             context, android.R.layout.simple_spinner_item, QifDateFormat.values());
@@ -283,53 +280,34 @@ public class DialogUtils {
     spinner.setAdapter(dateFormatAdapter);
     QifDateFormat qdf;
     try {
-      qdf = QifDateFormat.valueOf(
-          MyApplication.getInstance().getSettings()
-              .getString(prefName, "EU"));
+      qdf = QifDateFormat.valueOf(prefHandler.getString(prefName, "EU"));
     } catch (IllegalArgumentException e) {
       qdf = QifDateFormat.EU;
     }
     spinner.setSelection(qdf.ordinal());
-    return spinner;
   }
 
-  public static Spinner configureEncoding(View view, Context context, String prefName) {
-    Spinner spinner = (Spinner) view.findViewById(R.id.Encoding);
+  public static void configureEncoding(Spinner spinner, Context context, PrefHandler prefHandler, String prefName) {
     spinner.setSelection(
         Arrays.asList(context.getResources().getStringArray(R.array.pref_qif_export_file_encoding))
-            .indexOf(MyApplication.getInstance().getSettings()
-                .getString(prefName, "UTF-8")));
-    return spinner;
+            .indexOf(prefHandler.getString(prefName, "UTF-8")));
   }
 
-  public static Spinner configureDelimiter(View view, Context context, String prefName) {
-    Spinner spinner = (Spinner) view.findViewById(R.id.Delimiter);
+  public static void configureDelimiter(Spinner spinner, Context context, PrefHandler prefHandler, String prefName) {
     spinner.setSelection(
         Arrays.asList(context.getResources().getStringArray(R.array.pref_csv_import_delimiter_values))
-            .indexOf(MyApplication.getInstance().getSettings()
-                .getString(prefName, ",")));
-    return spinner;
+            .indexOf(prefHandler.getString(prefName, ",")));
   }
 
-  public static EditText configureFilename(View view) {
-    return (EditText) view.findViewById(R.id.Filename);
-  }
-
-  public static Spinner configureCurrencySpinner(
-      View view, AdapterView.OnItemSelectedListener listener) {
-    Spinner spinner = view.findViewById(R.id.Currency);
-    CurrencyAdapter curAdapter = new CurrencyAdapter(view.getContext(), android.R.layout.simple_spinner_item);
+  public static void configureCurrencySpinner(Spinner spinner, AdapterView.OnItemSelectedListener listener) {
+    CurrencyAdapter curAdapter = new CurrencyAdapter(spinner.getContext(), android.R.layout.simple_spinner_item);
     spinner.setAdapter(curAdapter);
     spinner.setOnItemSelectedListener(listener);
-    return spinner;
   }
 
-  public static Spinner configureTypeSpinner(View view) {
-    Spinner spinner = view instanceof Spinner ? (Spinner) view :
-        (Spinner) view.findViewById(R.id.AccountType);
+  public static void configureTypeSpinner(Spinner spinner) {
     ArrayAdapter<AccountType> typAdapter = new AccountTypeAdapter(spinner.getContext());
     spinner.setAdapter(typAdapter);
-    return spinner;
   }
 
   public static void openBrowse(Uri uri, Fragment fragment) {
@@ -347,7 +325,7 @@ public class DialogUtils {
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
     try {
-      fragment.startActivityForResult(intent, ProtectedFragmentActivity.IMPORT_FILENAME_REQUESTCODE);
+      fragment.startActivityForResult(intent, IMPORT_FILENAME_REQUEST_CODE);
     } catch (ActivityNotFoundException e) {
       ((ProtectedFragmentActivity) fragment.getActivity()).showSnackbar(R.string.no_filemanager_installed, Snackbar.LENGTH_SHORT);
     } catch (SecurityException ex) {
@@ -361,7 +339,7 @@ public class DialogUtils {
     Bundle b = new Bundle();
     b.putString(ConfirmationDialogFragment.KEY_MESSAGE,
         context.getString(R.string.dialog_confirm_sync_unlink, account.getSyncAccountName()));
-    b.putString(DatabaseConstants.KEY_UUID, account.uuid);
+    b.putString(DatabaseConstants.KEY_UUID, account.getUuid());
     b.putInt(ConfirmationDialogFragment.KEY_COMMAND_POSITIVE, R.id.SYNC_UNLINK_COMMAND);
     b.putInt(ConfirmationDialogFragment.KEY_POSITIVE_BUTTON_LABEL, R.string.menu_sync_unlink);
     b.putInt(ConfirmationDialogFragment.KEY_NEGATIVE_BUTTON_LABEL, android.R.string.cancel);

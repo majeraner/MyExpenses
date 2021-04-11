@@ -3,7 +3,6 @@ package org.totschnig.myexpenses.fragment;
 import android.app.Dialog;
 import android.content.ContentUris;
 import android.content.Context;
-import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -22,10 +21,8 @@ import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.GridView;
 import android.widget.ImageView;
-import android.widget.Toast;
 
 import com.android.calendar.CalendarContractCompat;
-import com.google.android.material.snackbar.Snackbar;
 import com.roomorama.caldroid.CaldroidFragment;
 import com.roomorama.caldroid.CaldroidGridAdapter;
 import com.roomorama.caldroid.CaldroidListener;
@@ -33,7 +30,6 @@ import com.roomorama.caldroid.CalendarHelper;
 import com.roomorama.caldroid.CellView;
 
 import org.totschnig.myexpenses.R;
-import org.totschnig.myexpenses.activity.ExpenseEdit;
 import org.totschnig.myexpenses.activity.ManageTemplates;
 import org.totschnig.myexpenses.activity.ProtectedFragmentActivity;
 import org.totschnig.myexpenses.provider.CalendarProviderProxy;
@@ -43,6 +39,7 @@ import org.totschnig.myexpenses.task.TaskExecutionFragment;
 import org.totschnig.myexpenses.util.ColorUtils;
 import org.totschnig.myexpenses.util.UiUtils;
 import org.totschnig.myexpenses.util.Utils;
+import org.totschnig.myexpenses.viewmodel.data.PlanInstanceState;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -53,6 +50,7 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.FragmentActivity;
 import androidx.loader.app.LoaderManager;
@@ -62,7 +60,7 @@ import hirondelle.date4j.DateTime;
 import icepick.Icepick;
 import icepick.State;
 
-import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_DATE;
+import static org.totschnig.myexpenses.fragment.PlannerFragmentKt.configureMenuInternalPlanInstances;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_INSTANCEID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_ROWID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TEMPLATEID;
@@ -78,33 +76,7 @@ public class PlanMonthFragment extends CaldroidFragment
   public static final int INSTANCE_STATUS_CURSOR = 2;
   private boolean readOnly;
 
-  private boolean isDarkThemeSelected() {
-    return getThemeType().equals(ProtectedFragmentActivity.ThemeType.dark);
-  }
-
-  private ProtectedFragmentActivity.ThemeType getThemeType() {
-    return ((ProtectedFragmentActivity) getContext()).getThemeType();
-  }
-
-  public void showSnackbar(String msg, int length) {
-    final Dialog dialog = getDialog();
-    if (dialog != null) {
-      final Window window = dialog.getWindow();
-      if (window != null) {
-        View view = window.getDecorView();
-        Snackbar snackbar = Snackbar.make(view, msg, length);
-        UiUtils.configureSnackbarForDarkTheme(snackbar, getThemeType());
-        snackbar.show();
-        return;
-      }
-      Toast.makeText(getContext(), msg, Toast.LENGTH_LONG).show();
-    }
-
-  }
-
-  private enum PlanInstanceState {
-    OPEN, APPLIED, CANCELLED
-  }
+  StateListDrawable stateListDrawable;
 
   @State
   protected HashMap<Long, Long> instance2TransactionMap = new HashMap<>();
@@ -115,13 +87,11 @@ public class PlanMonthFragment extends CaldroidFragment
   protected HashMap<DateTime, Long> dateTime2TimeStampMap = new HashMap<>();
 
   public static PlanMonthFragment newInstance(String title, long templateId, long planId, int color,
-                                              boolean readOnly, ProtectedFragmentActivity.ThemeType themeType) {
+                                              boolean readOnly) {
     PlanMonthFragment f = new PlanMonthFragment();
     Bundle args = new Bundle();
     args.putString(TOOLBAR_TITLE, title);
-    args.putInt(CaldroidFragment.THEME_RESOURCE,
-        themeType.equals(ProtectedFragmentActivity.ThemeType.dark) ?
-            R.style.CaldroidCustomDark : R.style.CaldroidCustom);
+    args.putInt(CaldroidFragment.THEME_RESOURCE, R.style.CaldroidCustom);
     args.putLong(DatabaseConstants.KEY_PLANID, planId);
     args.putInt(DatabaseConstants.KEY_COLOR, color);
     args.putLong(DatabaseConstants.KEY_ROWID, templateId);
@@ -158,6 +128,35 @@ public class PlanMonthFragment extends CaldroidFragment
           ((TemplatesList) getParentFragment()).registerForContextualActionBar(gridView);
       }
     });
+    setupStateListDrawable();
+  }
+
+  private void setupStateListDrawable() {
+    int accountColor = getArguments().getInt(DatabaseConstants.KEY_COLOR);
+    stateListDrawable = new StateListDrawable();
+    final int surfaceColor = UiUtils.getColor(requireContext(), R.attr.colorSurface);
+    int todayDrawableResId = R.drawable.red_border;
+    GradientDrawable today = (GradientDrawable) AppCompatResources.getDrawable(requireContext(), todayDrawableResId).mutate();
+    GradientDrawable todaySelected = (GradientDrawable) AppCompatResources.getDrawable(requireContext(), todayDrawableResId).mutate();
+    todaySelected.setColor(accountColor);
+    today.setColor(surfaceColor);
+    stateListDrawable.addState(new int[]{android.R.attr.state_activated},
+        new ColorDrawable(getContext().getResources().getColor(R.color.appDefault)));
+    stateListDrawable.addState(
+        new int[]{R.attr.state_date_selected, R.attr.state_date_today},
+        todaySelected);
+    stateListDrawable.addState(
+        new int[]{R.attr.state_date_selected},
+        new ColorDrawable(accountColor));
+    stateListDrawable.addState(
+        new int[]{R.attr.state_date_today},
+        today);
+    stateListDrawable.addState(
+        new int[]{R.attr.state_date_prev_next_month},
+        new ColorDrawable(getContext().getResources().getColor(R.color.caldroid_state_date_prev_next_month)));
+    stateListDrawable.addState(
+        new int[]{},
+        new ColorDrawable(surfaceColor));
   }
 
   @NonNull
@@ -165,7 +164,7 @@ public class PlanMonthFragment extends CaldroidFragment
   public Dialog onCreateDialog(Bundle savedInstanceState) {
     return new Dialog(getActivity(), getTheme()) {
       @Override
-      public boolean onMenuItemSelected(int featureId, MenuItem item) {
+      public boolean onMenuItemSelected(int featureId, @NonNull MenuItem item) {
         if (featureId == Window.FEATURE_CONTEXT_MENU) {
           return getParentFragment().onContextItemSelected(item);
         } else {
@@ -181,7 +180,7 @@ public class PlanMonthFragment extends CaldroidFragment
 
   @Override
   public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-    mManager = getLoaderManager();
+    mManager = LoaderManager.getInstance(this);
     View view = super.onCreateView(inflater, container, savedInstanceState);
     Toolbar toolbar = view.findViewById(R.id.calendar_toolbar);
     toolbar.setOnMenuItemClickListener(item -> {
@@ -285,91 +284,75 @@ public class PlanMonthFragment extends CaldroidFragment
   }
 
   public void dispatchCommandSingle(int command, int position) {
-    Intent i;
     long instanceId = getPlanInstanceForPosition(position);
     final FragmentActivity activity = getActivity();
-    if (activity == null) return;
+    final Bundle arguments = getArguments();
+    final TemplatesList templatesList = (TemplatesList) getParentFragment();
+    if (activity == null || arguments == null || templatesList == null) return;
     if (instanceId != -1) {
-      switch (command) {
-        case R.id.CREATE_PLAN_INSTANCE_EDIT_COMMAND:
-          i = new Intent(activity, ExpenseEdit.class);
-          i.putExtra(KEY_TEMPLATEID, getArguments().getLong(KEY_ROWID));
-          i.putExtra(KEY_INSTANCEID, instanceId);
-          i.putExtra(KEY_DATE, getDateForPosition(position));
-          startActivityForResult(i, 0);
-          break;
-        case R.id.EDIT_PLAN_INSTANCE_COMMAND:
-          i = new Intent(activity, ExpenseEdit.class);
-          i.putExtra(KEY_ROWID, instance2TransactionMap.get(instanceId));
-          startActivity(i);
-          break;
+      if (command == R.id.CREATE_PLAN_INSTANCE_EDIT_COMMAND) {
+        templatesList.dispatchCreateInstanceEdit(arguments.getLong(KEY_ROWID), instanceId, getDateForPosition(position));
+      } else if (command == R.id.EDIT_PLAN_INSTANCE_COMMAND) {
+        templatesList.dispatchEditInstance(instance2TransactionMap.get(instanceId));
       }
     }
   }
 
   public void dispatchCommandMultiple(int command, SparseBooleanArray positions) {
-    ArrayList<Long[]> extra2dAL = new ArrayList<Long[]>();
-    ArrayList<Long> objectIdsAL = new ArrayList<Long>();
+    ArrayList<Long[]> extra2dAL = new ArrayList<>();
+    ArrayList<Long> objectIdsAL = new ArrayList<>();
     final ProtectedFragmentActivity activity = (ProtectedFragmentActivity) getActivity();
     final Bundle arguments = getArguments();
-    if (activity == null || arguments == null) return;
-    switch (command) {
-      case R.id.CREATE_PLAN_INSTANCE_SAVE_COMMAND:
-        for (int i = 0; i < positions.size(); i++) {
-          if (positions.valueAt(i)) {
-            int position = positions.keyAt(i);
-            long instanceId = getPlanInstanceForPosition(position);
-            //ignore instances that are not open
-            if (instanceId == -1 || instance2TransactionMap.get(instanceId) != null)
-              continue;
-            //pass event instance id and date as extra
-            extra2dAL.add(new Long[]{instanceId, getDateForPosition(position)});
-            objectIdsAL.add(arguments.getLong(KEY_ROWID));
-          }
+    final TemplatesList templatesList = (TemplatesList) getParentFragment();
+    if (activity == null || arguments == null || templatesList == null) return;
+    if (command == R.id.CREATE_PLAN_INSTANCE_SAVE_COMMAND) {
+      for (int i = 0; i < positions.size(); i++) {
+        if (positions.valueAt(i)) {
+          int position = positions.keyAt(i);
+          long instanceId = getPlanInstanceForPosition(position);
+          //ignore instances that are not open
+          if (instanceId == -1 || instance2TransactionMap.get(instanceId) != null)
+            continue;
+          //pass event instance id and date as extra
+          extra2dAL.add(new Long[]{instanceId, getDateForPosition(position)});
+          objectIdsAL.add(arguments.getLong(KEY_ROWID));
         }
-        activity.startTaskExecution(
-            TaskExecutionFragment.TASK_NEW_FROM_TEMPLATE,
-            objectIdsAL.toArray(new Long[0]),
-            extra2dAL.toArray(new Long[extra2dAL.size()][2]),
-            0);
-        break;
-      case R.id.CANCEL_PLAN_INSTANCE_COMMAND:
-        for (int i = 0; i < positions.size(); i++) {
-          if (positions.valueAt(i)) {
-            int position = positions.keyAt(i);
-            long instanceId = getPlanInstanceForPosition(position);
-            if (instanceId == -1)
-              continue;
-            objectIdsAL.add(instanceId);
-            extra2dAL.add(new Long[]{arguments.getLong(KEY_ROWID),
-                instance2TransactionMap.get(instanceId)});
-          }
+      }
+      templatesList.dispatchCreateInstanceSaveDo(objectIdsAL.toArray(new Long[0]),
+          extra2dAL.toArray(new Long[extra2dAL.size()][2]));
+    } else if (command == R.id.CANCEL_PLAN_INSTANCE_COMMAND) {
+      for (int i = 0; i < positions.size(); i++) {
+        if (positions.valueAt(i)) {
+          int position = positions.keyAt(i);
+          long instanceId = getPlanInstanceForPosition(position);
+          if (instanceId == -1)
+            continue;
+          objectIdsAL.add(instanceId);
+          extra2dAL.add(new Long[]{arguments.getLong(KEY_ROWID),
+              instance2TransactionMap.get(instanceId)});
         }
-        activity.startTaskExecution(
-            TaskExecutionFragment.TASK_CANCEL_PLAN_INSTANCE,
-            objectIdsAL.toArray(new Long[0]),
-            extra2dAL.toArray(new Long[extra2dAL.size()][2]),
-            0);
-        break;
-      case R.id.RESET_PLAN_INSTANCE_COMMAND:
-        for (int i = 0; i < positions.size(); i++) {
-          if (positions.valueAt(i)) {
-            int position = positions.keyAt(i);
-            long instanceId = getPlanInstanceForPosition(position);
-            if (instanceId == -1)
-              continue;
-            objectIdsAL.add(instanceId);
-            //pass transactionId in extra
-            extra2dAL.add(new Long[]{arguments.getLong(KEY_ROWID),
-                instance2TransactionMap.get(instanceId)});
-          }
+      }
+      templatesList.dispatchTask(
+          TaskExecutionFragment.TASK_CANCEL_PLAN_INSTANCE,
+          objectIdsAL.toArray(new Long[0]),
+          extra2dAL.toArray(new Long[extra2dAL.size()][2]));
+    } else if (command == R.id.RESET_PLAN_INSTANCE_COMMAND) {
+      for (int i = 0; i < positions.size(); i++) {
+        if (positions.valueAt(i)) {
+          int position = positions.keyAt(i);
+          long instanceId = getPlanInstanceForPosition(position);
+          if (instanceId == -1)
+            continue;
+          objectIdsAL.add(instanceId);
+          //pass transactionId in extra
+          extra2dAL.add(new Long[]{arguments.getLong(KEY_ROWID),
+              instance2TransactionMap.get(instanceId)});
         }
-        activity.startTaskExecution(
-            TaskExecutionFragment.TASK_RESET_PLAN_INSTANCE,
-            objectIdsAL.toArray(new Long[0]),
-            extra2dAL.toArray(new Long[extra2dAL.size()][2]),
-            0);
-        break;
+      }
+      templatesList.dispatchTask(
+          TaskExecutionFragment.TASK_RESET_PLAN_INSTANCE,
+          objectIdsAL.toArray(new Long[0]),
+          extra2dAL.toArray(new Long[extra2dAL.size()][2]));
     }
   }
 
@@ -408,21 +391,9 @@ public class PlanMonthFragment extends CaldroidFragment
   }
 
   public void configureMenuLegacy(Menu menu, ContextMenu.ContextMenuInfo menuInfo) {
-    boolean withOpen = false, withApplied = false, withCancelled = false;
     long instanceId = getPlanInstanceForPosition(((AdapterView.AdapterContextMenuInfo) menuInfo).position);
     if (instanceId != -1) {
-      switch (getState(instanceId)) {
-        case APPLIED:
-          withApplied = true;
-          break;
-        case CANCELLED:
-          withCancelled = true;
-          break;
-        case OPEN:
-          withOpen = true;
-          break;
-      }
-      configureMenuInternalPlanInstances(menu, 1, withOpen, withApplied, withCancelled);
+      configureMenuInternalPlanInstances(menu, getState(instanceId));
     }
   }
 
@@ -437,19 +408,6 @@ public class PlanMonthFragment extends CaldroidFragment
     }
   }
 
-  private void configureMenuInternalPlanInstances(Menu menu, int count, boolean withOpen,
-                                                  boolean withApplied, boolean withCancelled) {
-    //state open
-    menu.findItem(R.id.CREATE_PLAN_INSTANCE_SAVE_COMMAND).setVisible(withOpen);
-    menu.findItem(R.id.CREATE_PLAN_INSTANCE_EDIT_COMMAND).setVisible(count == 1 && withOpen);
-    //state open or applied
-    menu.findItem(R.id.CANCEL_PLAN_INSTANCE_COMMAND).setVisible(withOpen || withApplied);
-    //state cancelled or applied
-    menu.findItem(R.id.RESET_PLAN_INSTANCE_COMMAND).setVisible(withApplied || withCancelled);
-    //state applied
-    menu.findItem(R.id.EDIT_PLAN_INSTANCE_COMMAND).setVisible(count == 1 && withApplied);
-  }
-
   private class CaldroidCustomAdapter extends CaldroidGridAdapter {
 
     public CaldroidCustomAdapter(Context context, int month, int year,
@@ -461,19 +419,19 @@ public class PlanMonthFragment extends CaldroidFragment
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-      View framelayout;
+      View frameLayout;
 
       // For reuse
       if (convertView == null) {
         //TODO investigate why passing parent to inflate leads to corrupted display
         //noinspection InflateParams
-        framelayout = localInflater.inflate(R.layout.plan_calendar_cell, null);
+        frameLayout = localInflater.inflate(R.layout.plan_calendar_cell, null);
       } else {
-        framelayout = convertView;
+        frameLayout = convertView;
       }
 
-      CellView cell = (CellView) framelayout.findViewById(R.id.cell);
-      ImageView state = (ImageView) framelayout.findViewById(R.id.state);
+      CellView cell = (CellView) frameLayout.findViewById(R.id.cell);
+      ImageView state = (ImageView) frameLayout.findViewById(R.id.state);
 
       customizeTextView(position, cell);
 
@@ -483,16 +441,16 @@ public class PlanMonthFragment extends CaldroidFragment
         state.setVisibility(View.VISIBLE);
         Long transactionId = instance2TransactionMap.get(CalendarProviderProxy.calculateId(dateTime));
         boolean brightColor = ColorUtils.isBrightColor(getArguments().getInt(DatabaseConstants.KEY_COLOR));
-        int themeResId = brightColor ? R.style.ThemeLight : R.style.ThemeDark;
+        int themeResId = brightColor ? R.style.LightBackground : R.style.DarkBackground;
         if (transactionId == null) {
           state.setImageBitmap(UiUtils.getTintedBitmapForTheme(getContext(), R.drawable.ic_stat_open, themeResId));
-          framelayout.setContentDescription(getString(R.string.plan_instance_state_open));
+          frameLayout.setContentDescription(getString(R.string.plan_instance_state_open));
         } else if (transactionId == 0L) {
           state.setImageBitmap(UiUtils.getTintedBitmapForTheme(getContext(), R.drawable.ic_stat_cancelled, themeResId));
-          framelayout.setContentDescription(getString(R.string.plan_instance_state_cancelled));
+          frameLayout.setContentDescription(getString(R.string.plan_instance_state_cancelled));
         } else {
           state.setImageBitmap(UiUtils.getTintedBitmapForTheme(getContext(), R.drawable.ic_stat_applied, themeResId));
-          framelayout.setContentDescription(getString(R.string.plan_instance_state_applied));
+          frameLayout.setContentDescription(getString(R.string.plan_instance_state_applied));
         }
 
         cell.setTextColor(getContext().getResources().getColor(
@@ -501,37 +459,12 @@ public class PlanMonthFragment extends CaldroidFragment
         state.setVisibility(View.GONE);
       }
 
-      return framelayout;
+      return frameLayout;
     }
 
     @Override
     protected void resetCustomResources(CellView cellView) {
-      int accountColor = getArguments().getInt(DatabaseConstants.KEY_COLOR);
-      StateListDrawable stateListDrawable = new StateListDrawable();
-      int todayDrawable = isDarkThemeSelected() ? R.drawable.red_border_dark : R.drawable.red_border;
-      GradientDrawable todaySelected =
-          (GradientDrawable) getResources().getDrawable(todayDrawable).mutate();
-      todaySelected.setColor(accountColor);
-      stateListDrawable.addState(new int[]{android.R.attr.state_activated},
-          new ColorDrawable(getContext().getResources().getColor(R.color.appDefault)));
-      stateListDrawable.addState(
-          new int[]{R.attr.state_date_selected, R.attr.state_date_today},
-          todaySelected);
-      stateListDrawable.addState(
-          new int[]{R.attr.state_date_selected},
-          new ColorDrawable(accountColor));
-      stateListDrawable.addState(
-          new int[]{R.attr.state_date_today},
-          getResources().getDrawable(todayDrawable));
-      stateListDrawable.addState(
-          new int[]{R.attr.state_date_prev_next_month},
-          new ColorDrawable(getContext().getResources().getColor(
-              isDarkThemeSelected() ? R.color.caldroid_333 : R.color.caldroid_white)));
-      stateListDrawable.addState(
-          new int[]{},
-          new ColorDrawable(getContext().getResources().getColor(
-              isDarkThemeSelected() ? R.color.caldroid_black : R.color.caldroid_white)));
-      cellView.setBackgroundDrawable(stateListDrawable);
+      cellView.setBackground(stateListDrawable.mutate().getConstantState().newDrawable());
 
       cellView.setTextColor(defaultTextColorRes);
     }

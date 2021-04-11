@@ -75,7 +75,7 @@ public abstract class  AccountMetaData implements Parcelable {
     }
     final CurrencyUnit currency = currencyContext.get(currency());
     Account account = new Account(label(), currency, openingBalance(), description(), accountType, color());
-    account.uuid = uuid();
+    account.setUuid(uuid());
     if (_criterion() != 0) {
       account.setCriterion(new Money(currency, _criterion()));
     }
@@ -90,11 +90,11 @@ public abstract class  AccountMetaData implements Parcelable {
 
   public static AccountMetaData from(Account account) {
     String homeCurrency = PrefKey.HOME_CURRENCY.getString(null);
-    final String accountCurrency = account.getCurrencyUnit().code();
+    final String accountCurrency = account.getCurrencyUnit().getCode();
     final Builder builder = builder()
         .setCurrency(accountCurrency)
         .setColor(account.color)
-        .setUuid(account.uuid)
+        .setUuid(account.getUuid())
         .setDescription(account.description)
         .setLabel(account.getLabel())
         .setOpeningBalance(account.openingBalance.getAmountMinor())

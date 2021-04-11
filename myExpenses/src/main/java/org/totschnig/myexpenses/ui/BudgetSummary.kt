@@ -5,53 +5,53 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.widget.LinearLayout
 import androidx.core.view.isVisible
-import kotlinx.android.synthetic.main.budget_summary.view.*
-import kotlinx.android.synthetic.main.budget_total_table.view.*
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.activity.BudgetActivity.getBackgroundForAvailable
+import org.totschnig.myexpenses.databinding.BudgetSummaryBinding
+import org.totschnig.myexpenses.databinding.BudgetTotalTableBinding
 import org.totschnig.myexpenses.model.Money
-import org.totschnig.myexpenses.util.ColorUtils.getContrastColor
+import org.totschnig.myexpenses.util.ColorUtils.getComplementColor
 import org.totschnig.myexpenses.util.CurrencyFormatter
 import org.totschnig.myexpenses.util.UiUtils
 import org.totschnig.myexpenses.viewmodel.data.Budget
+import kotlin.math.roundToInt
 
 class BudgetSummary @JvmOverloads constructor(
         context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : LinearLayout(context, attrs, defStyleAttr) {
 
+    private val binding = BudgetSummaryBinding.inflate(LayoutInflater.from(context), this)
+    private val tableBinding = BudgetTotalTableBinding.bind(binding.root)
+
     init {
-        LayoutInflater.from(context).inflate(R.layout.budget_summary, this, true)
         val ta = context.obtainStyledAttributes(attrs, R.styleable.BudgetSummary)
         val withAllocated = ta.getBoolean(R.styleable.BudgetSummary_withAllocated, true)
         ta.recycle()
         if (!withAllocated) {
-            allocatedLabel.isVisible = false
-            totalAllocated.isVisible = false
+            tableBinding.allocatedLabel.isVisible = false
+            tableBinding.totalAllocated.isVisible = false
         }
     }
 
     fun setOnBudgetClickListener(listener: OnClickListener) {
-        totalBudget.setOnClickListener(listener)
+        tableBinding.totalBudget.setOnClickListener(listener)
     }
 
     fun setAllocated(allocated: String) {
-        totalAllocated.setText(allocated)
+        tableBinding.totalAllocated.text = allocated
     }
 
     fun bind(budget: Budget, spent: Long, currencyFormatter: CurrencyFormatter) {
-        budgetProgressTotal.setFinishedStrokeColor(budget.color)
-        budgetProgressTotal.setUnfinishedStrokeColor(getContrastColor(budget.color))
-        totalBudget.text = currencyFormatter.formatCurrency(budget.amount)
-        totalAmount.text = currencyFormatter.formatCurrency(Money(budget.currency, -spent))
-        val allocated = budget.amount.getAmountMinor()
+        binding.budgetProgressTotal.finishedStrokeColor = budget.color
+        binding.budgetProgressTotal.unfinishedStrokeColor = getComplementColor(budget.color)
+        tableBinding.totalBudget.text = currencyFormatter.formatCurrency(budget.amount)
+        tableBinding.totalAmount.text = currencyFormatter.formatCurrency(Money(budget.currency, -spent))
+        val allocated = budget.amount.amountMinor
         val available = allocated - spent
-        totalAvailable.text = currencyFormatter.formatCurrency(Money(budget.currency, available))
+        tableBinding.totalAvailable.text = currencyFormatter.formatCurrency(Money(budget.currency, available))
         val onBudget = available >= 0
-        totalAvailable.setBackgroundResource(getBackgroundForAvailable(onBudget, context))
-        totalAvailable.setTextColor(if (onBudget)
-            UiUtils.themeIntAttr(context, R.attr.colorIncome)
-        else
-            UiUtils.themeIntAttr(context, R.attr.colorExpense))
-        val progress = if (allocated == 0L) 100 else Math.round(spent * 100f / allocated)
-        UiUtils.configureProgress(budgetProgressTotal, progress)
+        tableBinding.totalAvailable.setBackgroundResource(getBackgroundForAvailable(onBudget))
+        tableBinding.totalAvailable.setTextColor(context.resources.getColor(if (onBudget) R.color.colorIncome else R.color.colorExpense))
+        val progress = if (allocated == 0L) 100 else (spent * 100f / allocated).roundToInt()
+        UiUtils.configureProgress(binding.budgetProgressTotal, progress)
     }
 }

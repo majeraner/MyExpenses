@@ -12,7 +12,7 @@ import junit.framework.Assert;
 import org.threeten.bp.LocalDate;
 import org.threeten.bp.format.DateTimeFormatter;
 import org.totschnig.myexpenses.MyApplication;
-import org.totschnig.myexpenses.fortest.test.R;
+import org.totschnig.myexpenses.debug.test.R;
 import org.totschnig.myexpenses.model.Account;
 import org.totschnig.myexpenses.model.AccountType;
 import org.totschnig.myexpenses.model.Category;
@@ -41,7 +41,6 @@ import timber.log.Timber;
 import static org.totschnig.myexpenses.contract.TransactionsContract.Transactions.TYPE_TRANSACTION;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_BUDGET;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.STATUS_NONE;
-import static org.totschnig.myexpenses.provider.DatabaseConstants.STATUS_UNCOMMITTED;
 
 @SuppressLint("InlinedApi")
 public class Fixture {
@@ -87,7 +86,7 @@ public class Fixture {
     SYNC_ACCOUNT_2 = "Dropbox - " + testContext.getString(R.string.testData_sync_backend_2_name);
     SYNC_ACCOUNT_3 = "WebDAV - https://my.private.cloud/webdav/MyExpenses";
     CurrencyUnit defaultCurrency = Utils.getHomeCurrency();
-    CurrencyUnit foreignCurrency = appContext.getAppComponent().currencyContext().get(defaultCurrency.code().equals("EUR") ? "GBP" : "EUR");
+    CurrencyUnit foreignCurrency = appContext.getAppComponent().currencyContext().get(defaultCurrency.getCode().equals("EUR") ? "GBP" : "EUR");
 
     account1 = new Account(
         testContext.getString(R.string.testData_account1Label),

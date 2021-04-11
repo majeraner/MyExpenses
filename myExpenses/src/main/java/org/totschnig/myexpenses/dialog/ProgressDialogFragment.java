@@ -11,7 +11,7 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with My Expenses.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 package org.totschnig.myexpenses.dialog;
 
@@ -23,7 +23,6 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.Button;
 
-import org.totschnig.myexpenses.MyApplication;
 import org.totschnig.myexpenses.ui.ScrollableProgressDialog;
 import org.totschnig.myexpenses.util.crashreporting.CrashHandler;
 
@@ -31,7 +30,8 @@ import androidx.annotation.NonNull;
 
 import static android.app.ProgressDialog.STYLE_SPINNER;
 
-public class ProgressDialogFragment extends CommitSafeDialogFragment {
+@Deprecated
+public class ProgressDialogFragment extends BaseDialogFragment {
   private static final String KEY_PROGRESS_STYLE = "progressStyle";
   private static final String KEY_MESSAGE = "message";
   private static final String KEY_WITH_BUTTON = "withButton";
@@ -43,31 +43,21 @@ public class ProgressDialogFragment extends CommitSafeDialogFragment {
   private boolean mTaskCompleted = false;
   private int progress = 0, max = 0;
   private String title, message;
-  private int dialogButton = DialogInterface.BUTTON_POSITIVE;
+  private final int dialogButton = DialogInterface.BUTTON_POSITIVE;
 
 
   /**
    * @param message if different from 0 a resource string identifier displayed as the dialogs's message
    * @return the dialog fragment
    */
-  public static ProgressDialogFragment newInstance(int message) {
-    return newInstance(message,false);
+  @Deprecated
+  public static ProgressDialogFragment newInstance(String message) {
+    return newInstance(message, false);
   }
 
-  public static ProgressDialogFragment newInstance(int message, boolean withButton) {
-    return newInstance(0, message, STYLE_SPINNER, withButton);
-  }
-
-  /**
-   * @param message       if different from 0 a resource string identifier displayed as the dialogs's message
-   * @param progressStyle {@link ProgressDialog#STYLE_SPINNER} or {@link ProgressDialog#STYLE_HORIZONTAL}
-   * @param withButton    if true dialog is rendered with an OK button that is initially disabled
-   * @return the dialog fragment
-   */
-  public static ProgressDialogFragment newInstance(int title, int message, int progressStyle, boolean withButton) {
-    String titleString = title != 0 ? MyApplication.getInstance().getString(title) : null;
-    String messageString = message != 0 ? MyApplication.getInstance().getString(message) : null;
-    return newInstance(titleString, messageString, progressStyle, withButton);
+  @Deprecated
+  public static ProgressDialogFragment newInstance(String message, boolean withButton) {
+    return newInstance(null, message, STYLE_SPINNER, withButton);
   }
 
   /**
@@ -76,6 +66,7 @@ public class ProgressDialogFragment extends CommitSafeDialogFragment {
    * @param withButton    if true dialog is rendered with an OK button that is initially disabled
    * @return the dialog fragment
    */
+  @Deprecated
   public static ProgressDialogFragment newInstance(String title, String message, int progressStyle, boolean withButton) {
     ProgressDialogFragment f = new ProgressDialogFragment();
     Bundle bundle = new Bundle();
@@ -127,6 +118,7 @@ public class ProgressDialogFragment extends CommitSafeDialogFragment {
     super.onDestroyView();
   }
 
+  @NonNull
   @Override
   public Dialog onCreateDialog(Bundle savedInstanceState) {
     int progressStyle = getArguments().getInt(KEY_PROGRESS_STYLE);
@@ -141,7 +133,7 @@ public class ProgressDialogFragment extends CommitSafeDialogFragment {
     }
     boolean withButton = getArguments().getBoolean(KEY_WITH_BUTTON);
     if (messageFromArguments != null) {
-      //message might have been set through setmessage
+      //message might have been set through setMessage
       if (message == null) {
         message = messageFromArguments + " …";
         mDialog.setMessage(message);
@@ -221,7 +213,7 @@ public class ProgressDialogFragment extends CommitSafeDialogFragment {
   }
 
   @Override
-  public void onSaveInstanceState(Bundle outState) {
+  public void onSaveInstanceState(@NonNull Bundle outState) {
     super.onSaveInstanceState(outState);
     outState.putBoolean(KEY_TASK_COMPLETED, mTaskCompleted);
     outState.putString(KEY_TITLE, title);

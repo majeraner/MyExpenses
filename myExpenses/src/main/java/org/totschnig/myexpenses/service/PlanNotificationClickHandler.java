@@ -22,7 +22,6 @@ import java.util.Date;
 import java.util.List;
 
 import androidx.annotation.Nullable;
-import androidx.core.util.Pair;
 
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_INSTANCEID;
 import static org.totschnig.myexpenses.provider.DatabaseConstants.KEY_TEMPLATEID;
@@ -51,18 +50,18 @@ public class PlanNotificationClickHandler extends IntentService {
         .setSmallIcon(R.drawable.ic_stat_notification_sigma)
         .setContentTitle(title);
     int notificationId = extras.getInt(MyApplication.KEY_NOTIFICATION_ID);
-    Long templateId = extras.getLong(DatabaseConstants.KEY_TEMPLATEID);
+    long templateId = extras.getLong(DatabaseConstants.KEY_TEMPLATEID);
     Long instanceId = extras.getLong(DatabaseConstants.KEY_INSTANCEID);
     switch (action) {
       case PlanExecutor.ACTION_APPLY:
-        Pair<Transaction, List<Tag>> pair = Transaction.getInstanceFromTemplate(templateId);
+        kotlin.Pair<Transaction, List<Tag>> pair = Transaction.getInstanceFromTemplateWithTags(templateId);
         if (pair == null) {
           message = getString(R.string.save_transaction_template_deleted);
         } else {
-          Transaction t = pair.first;
+          Transaction t = pair.getFirst();
           t.setDate(new Date(extras.getLong(DatabaseConstants.KEY_DATE)));
-          t.originPlanInstanceId = instanceId;
-          if (t.save(true) != null && t.saveTags(pair.second, getContentResolver())) {
+          t.setOriginPlanInstanceId(instanceId);
+          if (t.save(true) != null && t.saveTags(pair.getSecond(), getContentResolver())) {
             message = getResources().getQuantityString(
                 R.plurals.save_transaction_from_template_success, 1, 1);
             Intent displayIntent = new Intent(this, MyExpenses.class)
