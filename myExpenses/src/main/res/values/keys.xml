@@ -107,6 +107,7 @@
     <string name="pref_openexchangerates_app_id_key">openexchangerates_app_id</string>
     <string name="pref_plan_executor_time_key">plan_executor_time</string>
     <string name="pref_webdav_key">webdav</string>
+    <string name="pref_hack_mode_key">hack_mode</string>
     <string name="pref_webdav_allow_unverified_host_key">webdav_allow_unverified_host</string>
     <string name="pref_clone_with_current_date_key">clone_with_current_date</string>
     <string name="pref_sync_key">sync</string>

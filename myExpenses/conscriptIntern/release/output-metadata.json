@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "artifactType": {
+    "type": "APK",
+    "kind": "Directory"
+  },
+  "applicationId": "org.totschnig.myexpenses",
+  "variantName": "processConscriptInternReleaseResources",
+  "elements": [
+    {
+      "type": "SINGLE",
+      "filters": [],
+      "versionCode": 479,
+      "versionName": "3.2.8",
+      "outputFile": "myExpenses-conscript-intern-release.apk"
+    }
+  ]
+}

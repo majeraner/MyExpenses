@@ -594,5 +594,10 @@
                 android:positiveButtonText="@string/menu_remove"
                 android:title="@string/pref_feature_uninstall_languages_title" />
         </PreferenceScreen>
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="@string/pref_hack_mode_key"
+            android:summary="@string/pref_hack_mode"
+            android:title="@string/pref_hack_mode_title" />
     </PreferenceCategory>
 </PreferenceScreen> 

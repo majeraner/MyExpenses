@@ -89,6 +89,7 @@ import eltos.simpledialogfragment.SimpleDialog;
 import eltos.simpledialogfragment.form.Input;
 import eltos.simpledialogfragment.form.SimpleFormDialog;
 import eltos.simpledialogfragment.input.SimpleInputDialog;
+import eltos.simpledialogfragment.form.DateTime;
 
 import static org.threeten.bp.format.DateTimeFormatterBuilder.getLocalizedDateTimePattern;
 import static org.threeten.bp.format.FormatStyle.MEDIUM;
@@ -157,6 +158,7 @@ import static org.totschnig.myexpenses.preference.PrefKey.UI_LANGUAGE;
 import static org.totschnig.myexpenses.preference.PrefKey.UI_WEB;
 import static org.totschnig.myexpenses.util.PermissionHelper.PermissionGroup.CALENDAR;
 import static org.totschnig.myexpenses.util.TextUtils.concatResStrings;
+import static org.totschnig.myexpenses.preference.PrefKey.LICENCE_HACKED_DATE_UNTIL;
 
 public class SettingsFragment extends BaseSettingsFragment implements
     Preference.OnPreferenceClickListener,
@@ -170,6 +172,8 @@ public class SettingsFragment extends BaseSettingsFragment implements
   private static final int PICK_FOLDER_REQUEST = 2;
   private static final int CONTRIB_PURCHASE_REQUEST = 3;
   private static final int PICK_FOLDER_REQUEST_LEGACY = 4;
+  private static final String KEY_HACKED_DATE_SINCE = "hackedDateSince";
+  private static final String KEY_HACKED_DATE_UNTIL = "hackedDateSUntil";
 
   @Inject
   LicenceHandler licenceHandler;
@@ -757,6 +761,20 @@ public class SettingsFragment extends BaseSettingsFragment implements
             .neg(R.string.menu_remove)
             .show(this, DIALOG_MANAGE_LICENCE);
 
+      } else  if (prefHandler.getBoolean(PrefKey.HACK_MODE, false)) {
+        String licenceKey = prefHandler.getString(NEW_LICENCE, "hacked_licence");
+        String licenceEmail = prefHandler.getString(LICENCE_EMAIL, "hacked@hacked.com");
+        SimpleFormDialog.build()
+                .title(R.string.pref_enter_hack_licence_title)
+                .fields(
+                        Input.email(KEY_EMAIL).required().text(licenceEmail),
+                        Input.plain(KEY_KEY).required().hint(R.string.licence_key).text(licenceKey),
+                        // DateTime.picker(KEY_HACKED_DATE_SINCE).required().label(R.string.date_since),
+                        DateTime.picker(KEY_HACKED_DATE_UNTIL).required().label(R.string.date_until)
+                )
+                .pos(R.string.button_validate)
+                .neut()
+                .show(this, DIALOG_VALIDATE_LICENCE);
       } else {
         String licenceKey = prefHandler.getString(NEW_LICENCE, "");
         String licenceEmail = prefHandler.getString(LICENCE_EMAIL, "");
@@ -923,6 +941,12 @@ public class SettingsFragment extends BaseSettingsFragment implements
       if (which == BUTTON_POSITIVE) {
         prefHandler.putString(NEW_LICENCE, extras.getString(KEY_KEY).trim());
         prefHandler.putString(LICENCE_EMAIL, extras.getString(KEY_EMAIL).trim());
+
+        if (prefHandler.getBoolean(PrefKey.HACK_MODE, false)) {
+          // prefHandler.putLong(LICENCE_HACKED_DATE_SINCE, extras.getLong(KEY_HACKED_DATE_SINCE));
+          prefHandler.putLong(LICENCE_HACKED_DATE_UNTIL, extras.getLong(KEY_HACKED_DATE_UNTIL));
+        }
+
         activity().validateLicence();
       }
     } else if (DIALOG_MANAGE_LICENCE.equals(dialogTag)) {

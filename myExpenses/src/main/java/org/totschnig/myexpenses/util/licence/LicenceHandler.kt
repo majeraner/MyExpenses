@@ -11,6 +11,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.apache.commons.lang3.time.DateUtils
+import org.threeten.bp.Instant;
+import org.threeten.bp.LocalDate;
 import org.threeten.bp.LocalTime
 import org.threeten.bp.ZoneId
 import org.totschnig.myexpenses.BuildConfig
@@ -140,6 +142,20 @@ open class LicenceHandler(protected val context: MyApplication, var licenseStatu
         } else {
             licenseStatusPrefs.remove(LICENSE_VALID_UNTIL_KEY)
         }
+        licenseStatusPrefs.commit()
+        update()
+    }
+
+    open fun updateLicenceStatusHack(licenceHacked: LicenceStatus?, hackedSince: Long, hackedUntil: Long) {
+        this.licenceStatus = licenceHacked;
+        licenseStatusPrefs.putString(LICENSE_STATUS_KEY, licenceHacked?.name ?: "null")
+        // LocalDate validSinceLocalDate = Instant.ofEpochMilli(hackedSince).atZone(ZoneId.systemDefault()).toLocalDate();
+        // ZonedDateTime validSince = validSinceLocalDate.atTime(LocalTime.MIN).atZone(ZoneId.of("Etc/GMT-14"));
+        val validSince = LocalDate.now().atTime(LocalTime.MIN).atZone(ZoneId.of("Etc/GMT-14"))
+        licenseStatusPrefs.putString(LICENSE_VALID_SINCE_KEY, java.lang.String.valueOf(validSince.toEpochSecond() * 1000))
+        val validUntilLocalDate: LocalDate = Instant.ofEpochMilli(hackedUntil).atZone(ZoneId.systemDefault()).toLocalDate()
+        val validUntil = validUntilLocalDate.atTime(LocalTime.MAX).atZone(ZoneId.of("Etc/GMT+12"))
+        licenseStatusPrefs.putString(LICENSE_VALID_UNTIL_KEY, java.lang.String.valueOf(validUntil.toEpochSecond() * 1000))
         licenseStatusPrefs.commit()
         update()
     }
