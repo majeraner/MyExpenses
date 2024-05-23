@@ -25,16 +25,24 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.RadioButton
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.res.ResourcesCompat.getColor
 import androidx.core.text.HtmlCompat
 import androidx.core.text.HtmlCompat.FROM_HTML_MODE_LEGACY
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.evernote.android.state.State
 import com.evernote.android.state.StateSaver
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import eltos.simpledialogfragment.SimpleDialog
+import eltos.simpledialogfragment.form.DateTime
+import eltos.simpledialogfragment.form.Input
+import eltos.simpledialogfragment.form.SimpleFormDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.activity.ContribInfoDialogActivity
 import org.totschnig.myexpenses.activity.ProtectedFragmentActivity
@@ -50,12 +58,16 @@ import org.totschnig.myexpenses.util.crashreporting.CrashHandler
 import org.totschnig.myexpenses.util.distrib.DistributionHelper.isGithub
 import org.totschnig.myexpenses.util.distrib.DistributionHelper.isPlay
 import org.totschnig.myexpenses.util.licence.AddOnPackage
+import org.totschnig.myexpenses.util.licence.Licence
 import org.totschnig.myexpenses.util.licence.LicenceHandler
 import org.totschnig.myexpenses.util.licence.LicenceStatus
 import org.totschnig.myexpenses.util.licence.Package
 import org.totschnig.myexpenses.util.licence.ProfessionalPackage
 import org.totschnig.myexpenses.util.tracking.Tracker
 import java.io.Serializable
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 
 class ContribDialogFragment : BaseDialogFragment(), View.OnClickListener,
@@ -264,6 +276,10 @@ class ContribDialogFragment : BaseDialogFragment(), View.OnClickListener,
             } ?: R.string.upgrade_now, null
             )
 
+        if (prefHandler.getBoolean(PrefKey.HACK_MODE, false)) {
+            builder.setNegativeButton(R.string.hack_it, null)
+        }
+
         if (licenceHandler.needsKeyEntry && !licenceHandler.hasValidKey()) {
             builder.setNeutralButton(R.string.pref_enter_licence_title, null)
         }
@@ -272,6 +288,8 @@ class ContribDialogFragment : BaseDialogFragment(), View.OnClickListener,
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener { onPositiveButtonClicked() }
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                .setOnClickListener { onNegativeButtonClicked() }
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
                 .setOnClickListener { onNeutralButtonClicked() }
             if (savedInstanceState != null) {
@@ -318,6 +336,20 @@ class ContribDialogFragment : BaseDialogFragment(), View.OnClickListener,
         }
     }
 
+    private fun onNegativeButtonClicked() {
+        SimpleFormDialog.build()
+            .title(R.string.hack_licence_enter_title)
+            .msg(R.string.hack_licence_enter_message)
+            .fields(
+                Input.email(KEY_EMAIL).required(),
+                Input.plain(KEY_KEY).required().hint(R.string.licence_key),
+                DateTime.picker(KEY_HACKED_DATE_UNTIL).required().label(R.string.date_until)
+            )
+            .pos(R.string.hack_button)
+            .neut()
+            .show(this, DIALOG_HACK_LICENCE)
+    }
+
     private fun onNeutralButtonClicked() {
         LicenceKeyDialogFragment().show(childFragmentManager, "LICENCE_KEY")
     }
@@ -339,7 +371,50 @@ class ContribDialogFragment : BaseDialogFragment(), View.OnClickListener,
                 }
             }
         }
+
+        if (dialogTag == DIALOG_HACK_LICENCE) {
+            if (which == SimpleDialog.OnDialogResultListener.BUTTON_POSITIVE) {
+                var licence = Licence(
+                    validSince = LocalDate.now(),
+                    validUntil =  Instant.ofEpochMilli(extras.getLong(KEY_HACKED_DATE_UNTIL)).atZone(ZoneId.systemDefault()).toLocalDate(),
+                    type = LicenceStatus.PROFESSIONAL,
+                    features = null,
+                );
+                validateHackedLicence(licence, extras.getString(KEY_EMAIL)!!.trim(), extras.getString(KEY_KEY)!!.trim())
+            }
+        }
         return true
+    }
+
+    fun validateHackedLicence(licence: Licence, email: String, key: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    licenceHandler.updateLicenceStatus(licence)
+                    prefHandler.putBoolean(PrefKey.HACKED, true)
+                    prefHandler.putString(
+                        PrefKey.NEW_LICENCE,
+                        key
+                    )
+                    prefHandler.putString(
+                        PrefKey.LICENCE_EMAIL,
+                        email
+                    )
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), R.string.hack_licence_add_success, Toast.LENGTH_LONG).show()
+                    }
+                    dialog?.cancel()
+                } catch (e: Exception) {
+                    prefHandler.putBoolean(PrefKey.HACKED, false)
+                    prefHandler.remove(PrefKey.NEW_LICENCE)
+                    prefHandler.remove(PrefKey.LICENCE_EMAIL)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), R.string.hack_licence_add_fail, Toast.LENGTH_LONG).show()
+                    }
+                }
+
+            }
+        }
     }
 
     override fun onCancel(dialog: DialogInterface) {
@@ -432,6 +507,9 @@ class ContribDialogFragment : BaseDialogFragment(), View.OnClickListener,
         const val DIALOG_VALIDATE_LICENCE = "validateLicence"
         const val KEY_EMAIL = "email"
         const val KEY_KEY = "key"
+        const val DIALOG_HACK_LICENCE = "hackLicence"
+        const val KEY_HACKED_DATE_SINCE = "hackedDateSince"
+        const val KEY_HACKED_DATE_UNTIL = "hackedDateUntil"
 
         @JvmStatic
         fun newInstance(feature: String?, tag: Serializable?) = ContribDialogFragment().apply {

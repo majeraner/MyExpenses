@@ -363,14 +363,21 @@ open class LicenceHandler(
         }
 
     suspend fun handleExpiration() {
-        val licenceDuration = validUntilMillis - validSinceMillis
-        if (TimeUnit.MILLISECONDS.toDays(licenceDuration) > 240) { // roughly eight months
-            licenceStatus = LicenceStatus.EXTENDED_FALLBACK
-            licenseStatusPrefs.putString(LICENSE_STATUS_KEY, LicenceStatus.EXTENDED_FALLBACK.name)
-            licenseStatusPrefs.remove(LICENSE_VALID_UNTIL_KEY)
-            licenseStatusPrefs.commit()
+        if (prefHandler.getBoolean(PrefKey.HACKED, false)) {
+            prefHandler.putBoolean(PrefKey.HACKED, false)
+            prefHandler.remove(PrefKey.NEW_LICENCE)
+            prefHandler.remove(PrefKey.LICENCE_EMAIL)
+            voidLicenceStatus(false)
         } else {
-            voidLicenceStatus(true)
+            val licenceDuration = validUntilMillis - validSinceMillis
+            if (TimeUnit.MILLISECONDS.toDays(licenceDuration) > 240) { // roughly eight months
+                licenceStatus = LicenceStatus.EXTENDED_FALLBACK
+                licenseStatusPrefs.putString(LICENSE_STATUS_KEY, LicenceStatus.EXTENDED_FALLBACK.name)
+                licenseStatusPrefs.remove(LICENSE_VALID_UNTIL_KEY)
+                licenseStatusPrefs.commit()
+            } else {
+                voidLicenceStatus(true)
+            }
         }
     }
 

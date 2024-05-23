@@ -94,4 +94,10 @@
     <Preference
         android:key="@string/pref_more_info_dialog_key"
         android:title="@string/pref_more_info_dialog_title" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="@string/pref_hack_mode_key"
+        android:summary="@string/pref_hack_mode_summary"
+        android:title="@string/pref_hack_mode_title" />
 </PreferenceScreen>

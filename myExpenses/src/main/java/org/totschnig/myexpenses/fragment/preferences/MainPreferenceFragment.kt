@@ -5,9 +5,15 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.format.Formatter
 import androidx.core.content.res.ResourcesCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.*
 import com.evernote.android.state.State
 import com.evernote.android.state.StateSaver
+import eltos.simpledialogfragment.SimpleDialog
+import eltos.simpledialogfragment.form.SimpleFormDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.totschnig.myexpenses.R
 import org.totschnig.myexpenses.dialog.ConfirmationDialogFragment
 import org.totschnig.myexpenses.dialog.MoreInfoDialogFragment
@@ -18,7 +24,7 @@ import timber.log.Timber
 import java.util.Locale
 
 class MainPreferenceFragment : BasePreferenceFragment(),
-    MultiSelectListPreferenceDialogFragment2.OnClickListener {
+    SimpleDialog.OnDialogResultListener, MultiSelectListPreferenceDialogFragment2.OnClickListener {
 
     lateinit var adapter: PreferenceGroupAdapter
 
@@ -185,9 +191,56 @@ class MainPreferenceFragment : BasePreferenceFragment(),
             true
         }
 
+        matches(preference, PrefKey.HACK_MODE) -> {
+            if (!prefHandler.getBoolean(PrefKey.HACK_MODE, false)) {
+                if (prefHandler.getBoolean(PrefKey.HACKED, false)) {
+                    SimpleFormDialog.build()
+                        .title(R.string.hack_mode_disable_title)
+                        .msg(R.string.hack_mode_disable_message)
+                        .pos(R.string.hack_mode_button_yes)
+                        .neut()
+                        .cancelable(false)
+                        .show(this, KEY_HACKED_LICENCE_REMOVE)
+                }
+            }
+            true
+        }
+
+
         super.onPreferenceTreeClick(preference) -> true
 
         handleContrib(PrefKey.BANKING_FINTS, ContribFeature.BANKING, preference) -> true
         else -> false
+    }
+
+    override fun onResult(dialogTag: String, which: Int, extras: Bundle): Boolean {
+        if (dialogTag == KEY_HACKED_LICENCE_REMOVE) {
+            if (which == SimpleDialog.OnDialogResultListener.BUTTON_POSITIVE) {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            prefHandler.remove(PrefKey.NEW_LICENCE)
+                            prefHandler.remove(PrefKey.LICENCE_EMAIL)
+                            prefHandler.remove(PrefKey.HACKED)
+                            licenceHandler.voidLicenceStatus(false)
+                            true to getString(R.string.hack_licence_remove_success)
+                        } catch (e: Exception) {
+                            false to getString(R.string.hack_licence_remove_fail)
+                        }
+                    }
+                }
+            } else if (which == SimpleDialog.OnDialogResultListener.BUTTON_NEUTRAL) {
+                prefHandler.putBoolean(PrefKey.HACK_MODE, true)
+                val batteryControl = findPreference<SwitchPreferenceCompat>(PrefKey.HACK_MODE)
+                if (batteryControl != null) {
+                    batteryControl.isChecked = true
+                }
+            }
+        }
+        return true
+    }
+
+    companion object {
+        const val KEY_HACKED_LICENCE_REMOVE = "removeHackLicence"
     }
 }

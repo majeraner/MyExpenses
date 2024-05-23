@@ -22,6 +22,8 @@ enum class PrefKey(internal val resId: Int, internal val _key: String?) {
     IMPORT_QIF(R.string.pref_import_qif_key),
     IMPORT_CSV(R.string.pref_import_csv_key),
     CONTRIB_PURCHASE(R.string.pref_contrib_purchase_key),
+    HACKED(R.string.pref_hacked_key),
+    HACK_MODE(R.string.pref_hack_mode_key),
     LICENCE_LEGACY(R.string.pref_enter_licence_key),
     NEW_LICENCE(R.string.pref_new_licence_key),
     LICENCE_EMAIL("licence_email"),

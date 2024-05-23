@@ -71,19 +71,31 @@ class LicenceValidationViewModel(application: Application) : BaseViewModel(appli
                 if (licenceKey.isEmpty() || licenceEmail.isEmpty()) {
                     false to "Email or Key Missing"
                 } else {
-                    val licenceCall = service.removeLicence(licenceEmail, licenceKey, deviceId)
-                    try {
-                        val licenceResponse = licenceCall.execute()
-                        if (licenceResponse.isSuccessful || licenceResponse.code() == 404) {
+                    if (prefHandler.getBoolean(PrefKey.HACKED, false)) {
+                        try {
+                            prefHandler.putBoolean(PrefKey.HACKED, false)
                             prefHandler.remove(PrefKey.NEW_LICENCE)
                             prefHandler.remove(PrefKey.LICENCE_EMAIL)
                             licenceHandler.voidLicenceStatus(false)
-                            true to getString(R.string.licence_removal_success)
-                        } else {
-                            false to licenceResponse.code().toString()
+                            true to getString(R.string.hack_licence_remove_success)
+                        } catch (e: IOException) {
+                            false to getString(R.string.hack_licence_remove_fail)
                         }
-                    } catch (e: IOException) {
-                        false to e.safeMessage
+                    } else {
+                        val licenceCall = service.removeLicence(licenceEmail, licenceKey, deviceId)
+                        try {
+                            val licenceResponse = licenceCall.execute()
+                            if (licenceResponse.isSuccessful || licenceResponse.code() == 404) {
+                                prefHandler.remove(PrefKey.NEW_LICENCE)
+                                prefHandler.remove(PrefKey.LICENCE_EMAIL)
+                                licenceHandler.voidLicenceStatus(false)
+                                true to getString(R.string.licence_removal_success)
+                            } else {
+                                false to licenceResponse.code().toString()
+                            }
+                        } catch (e: IOException) {
+                            false to e.safeMessage
+                        }
                     }
                 }
             }
@@ -96,40 +108,44 @@ class LicenceValidationViewModel(application: Application) : BaseViewModel(appli
                 if (licenceKey.isEmpty() || licenceEmail.isEmpty()) {
                     false to "Email or Key Missing"
                 } else {
-                    val licenceCall = service.validateLicence(licenceEmail, licenceKey, deviceId)
-                    try {
-                        val licenceResponse = licenceCall.execute()
-                        val licence = licenceResponse.body()
-                        if (licenceResponse.isSuccessful && licence != null) {
-                            licenceHandler.updateLicenceStatus(licence)
-                            val type = licence.type
-                            var successMessage =
-                                localizedContext.getString(R.string.licence_validation_success)
-                            successMessage += if (type == null) concatResStrings(
-                                localizedContext,
-                                ", ",
-                                *licence.featureListAsResIDs(localizedContext)
-                            ) else " " + localizedContext.getString(type.resId)
-                            true to successMessage
-                        } else {
-                            false to when (licenceResponse.code()) {
-                                452 -> {
-                                    licenceHandler.voidLicenceStatus(true)
-                                    getString(R.string.licence_validation_error_expired)
+                    if (prefHandler.getBoolean(PrefKey.HACKED, false)) {
+                        true to localizedContext.getString(R.string.hack_licence_validation_success)
+                    } else {
+                        val licenceCall = service.validateLicence(licenceEmail, licenceKey, deviceId)
+                        try {
+                            val licenceResponse = licenceCall.execute()
+                            val licence = licenceResponse.body()
+                            if (licenceResponse.isSuccessful && licence != null) {
+                                licenceHandler.updateLicenceStatus(licence)
+                                val type = licence.type
+                                var successMessage =
+                                    localizedContext.getString(R.string.licence_validation_success)
+                                successMessage += if (type == null) concatResStrings(
+                                    localizedContext,
+                                    ", ",
+                                    *licence.featureListAsResIDs(localizedContext)
+                                ) else " " + localizedContext.getString(type.resId)
+                                true to successMessage
+                            } else {
+                                false to when (licenceResponse.code()) {
+                                    452 -> {
+                                        licenceHandler.voidLicenceStatus(true)
+                                        getString(R.string.licence_validation_error_expired)
+                                    }
+                                    453 -> {
+                                        licenceHandler.voidLicenceStatus(false)
+                                        getString(R.string.licence_validation_error_device_limit_exceeded)
+                                    }
+                                    404 -> {
+                                        licenceHandler.voidLicenceStatus(false)
+                                        getString(R.string.licence_validation_failure)
+                                    }
+                                    else -> licenceResponse.code().toString()
                                 }
-                                453 -> {
-                                    licenceHandler.voidLicenceStatus(false)
-                                    getString(R.string.licence_validation_error_device_limit_exceeded)
-                                }
-                                404 -> {
-                                    licenceHandler.voidLicenceStatus(false)
-                                    getString(R.string.licence_validation_failure)
-                                }
-                                else -> licenceResponse.code().toString()
                             }
+                        } catch (e: IOException) {
+                            false to e.safeMessage
                         }
-                    } catch (e: IOException) {
-                        false to e.safeMessage
                     }
                 }
             }
